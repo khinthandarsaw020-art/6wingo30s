@@ -7,7 +7,7 @@ from collections import deque
 from flask import Flask
 
 # ==========================================
-# Telegram နဲ့ Supabase အချက်အလက်များ (ဒီနေရာမှာ ထည့်ပါ)
+# Telegram နဲ့ Supabase အချက်အလက်များ
 # ==========================================
 TELEGRAM_TOKEN = "8782457950:AAHbd-J29Y0fKhcBOHbSnn1d4z4vhiDQLKg" 
 CHAT_ID = "8745116942"
@@ -98,7 +98,6 @@ class PersistentHybridAgent:
         old_q = self.q_table[state][action]
         self.q_table[state][action] = old_q + self.lr * (reward - old_q)
         
-        # Cloud (Supabase) သို့ အလိုအလျောက် ပို့၍ သိမ်းဆည်းမည်
         self.save_q_table(state, self.q_table[state])
 
     def analyze_round(self, period, current_result):
@@ -222,5 +221,5 @@ if __name__ == "__main__":
     bot_thread.daemon = True
     bot_thread.start()
     
-    , port = int(os.environ.get("PORT", 10000))
+    port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
