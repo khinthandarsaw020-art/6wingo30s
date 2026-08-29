@@ -7,19 +7,20 @@ from collections import deque
 from flask import Flask
 
 # ==========================================
-# Telegram အချက်အလက်များ (သင့်အချက်အလက်ထည့်ရန်)
+# Telegram နဲ့ Supabase အချက်အလက်များ (ဒီနေရာမှာ ထည့်ပါ)
 # ==========================================
 TELEGRAM_TOKEN = "8782457950:AAHbd-J29Y0fKhcBOHbSnn1d4z4vhiDQLKg" 
 CHAT_ID = "8745116942"
-# ==========================================
 
-Q_TABLE_FILE = "q_table.json"
+SUPABASE_URL = "https://xdhhakpsonirkpimctlw.supabase.co"
+SUPABASE_KEY = "sb_publishable_bVJj1lqSAsIQ1kQ8Ae2vAQ_o3yCjDeA"
+# ==========================================
 
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Wingo AI Bot is Running 24/7!"
+    return "Wingo AI Bot with Supabase is Running 24/7!"
 
 class PersistentHybridAgent:
     def __init__(self):
@@ -36,19 +37,36 @@ class PersistentHybridAgent:
         self.q_table = self.load_q_table()
 
     def load_q_table(self):
-        if os.path.exists(Q_TABLE_FILE):
-            try:
-                with open(Q_TABLE_FILE, "r") as f:
-                    print("📂 AI ရဲ့ မှတ်ဉာဏ်ဟောင်း (Q-Table) များကို ဖတ်ရှုပြီးပါပြီ။")
-                    return json.load(f)
-            except Exception as e:
-                print("⚠️ မှတ်ဉာဏ်ဖိုင် ဖတ်ရာတွင် အမှားရှိသည်။")
+        headers = {
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}"
+        }
+        try:
+            res = requests.get(f"{SUPABASE_URL}/rest/v1/q_table?select=*", headers=headers)
+            if res.status_code == 200:
+                data = res.json()
+                q_dict = {}
+                for row in data:
+                    q_dict[row['state']] = row['actions']
+                print(f"📂 Supabase မှ AI ရဲ့ မှတ်ဉာဏ်များ ({len(q_dict)} states) ကို ဖတ်ရှုပြီးပါပြီ။")
+                return q_dict
+        except Exception as e:
+            print(f"⚠️ Supabase မှ ဖတ်ရာတွင် အမှားရှိသည်။: {e}")
         return {}
 
-    def save_q_table(self):
+    def save_q_table(self, state, actions):
+        headers = {
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}",
+            "Content-Type": "application/json",
+            "Prefer": "resolution=merge-duplicates"
+        }
+        payload = {
+            "state": state,
+            "actions": actions
+        }
         try:
-            with open(Q_TABLE_FILE, "w") as f:
-                json.dump(self.q_table, f)
+            requests.post(f"{SUPABASE_URL}/rest/v1/q_table", headers=headers, json=payload)
         except Exception as e:
             pass
 
@@ -79,7 +97,9 @@ class PersistentHybridAgent:
             self.q_table[state] = {"Big": 0.0, "Small": 0.0}
         old_q = self.q_table[state][action]
         self.q_table[state][action] = old_q + self.lr * (reward - old_q)
-        self.save_q_table()
+        
+        # Cloud (Supabase) သို့ အလိုအလျောက် ပို့၍ သိမ်းဆည်းမည်
+        self.save_q_table(state, self.q_table[state])
 
     def analyze_round(self, period, current_result):
         if self.active_prediction and self.last_state:
@@ -143,7 +163,7 @@ class PersistentHybridAgent:
                 f"🔥 <b>PERSISTENT HYBRID AI | Period: {period}</b>\n\n"
                 f"📈 Manus Regime: <b>{regime}</b>\n"
                 f"⚖️ Pressure Val: <b>{pressure_val:.2f}</b>\n"
-                f"🧠 Memory Saved: <b>Active ({len(self.q_table)} states)</b>\n\n"
+                f"🧠 Cloud Memory: <b>Active ({len(self.q_table)} states)</b>\n\n"
                 f"🎯 <b>လောင်းရမည့်ဘက်:</b> {final_prediction.upper()}\n"
                 f"💰 <b>Martingale:</b> Step {self.current_step + 1} ({multiplier}x)"
             )
@@ -160,12 +180,12 @@ class PersistentHybridAgent:
 def run_bot():
     agent = PersistentHybridAgent()
     last_period = ""
-    print("🚀 Persistent Hybrid AI Agent စတင် အလုပ်လုပ်နေပါပြီ...")
+    print("🚀 Supabase ချိတ်ဆက်ထားသော Persistent Hybrid AI Agent စတင် အလုပ်လုပ်နေပါပြီ...")
     
     url = "https://6lotteryapi.com/api/webapi/GetNoaverageEmerdList"
     headers = {
         "accept": "application/json, text/plain, */*",
-        "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOiIxNzg3OTgxNTA5IiwibmJmIjoiMTc4Nzk4MTUwOSIsImV4cCI6IjE3ODc5ODMzMDkiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL2V4cGlyYXRpb24iOiI4LzI5LzIwMjYgMTI6MzE6NDkgUE0iLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBY2Nlc3NfVG9rZW4iLCJVc2VySWQiOiIxMDEyMjEzIiwiVXNlck5hbWUiOiI5NTk3NDA5MzkzNzAiLCJVc2VyUGhvdG8iOiI5IiwiTmlja05hbWUiOiJUaetsR3lpIiwiQW1vdW50IjoiODcuMzAiLCJJbnRlZ3JhbCI6IjAiLCJMb2dpbk1hcmsiOiJINSIsIkxvZ2luVGltZSI6IjgvMjkvMjAyNiAxMjowMTo0OSBQTSIsIkxvZ2luSVBBZGRyZXNzIjoiNDUuNDEuMTA0LjI0MCIsImRiTnVtYmVyIjoiMCIsIklzdmFsaWRhdG9yIjoiMCIsIktleUNvZGUiOiIzMjMzMiIsIlRva2VuVHlwZSI6IkFjY2Vzc19Ub2tlbiIsImPhG9uZVR5cGUiOiIwIiwiVXNlclR5cGUiOiIwIiwiVXNlclR5c2UyOiIiLCJpc3MiOiJqd3RJc3N1ZXIiOiJhdWQiOiJsb3R0ZXJ5VGlja2V0In0.ZL0Y9gexUTCsKwWeZhCLAAw8AABEYJt0GnIzIviMG4g",
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOiIxNzg3OTgxNTA5IiwibmJmIjoiMTc4Nzk4MTUwOSIsImV4cCI6IjE3ODc5ODMzMDkiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL2V4cGlyYXRpb24iOiI4LzI5LzIwMjYgMTI6MzE6NDkgUE0iLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBY2Nlc3NfVG9rZW4iLCJVc2VySWQiOiIxMDEyMjEzIiwiVXNlck5hbWUiOiI5NTk3NDA5MzkzNzAiLCJVc2VyUGhvdG8iOiI5IiwiTmlja05hbWUiOiJUaetsR3lpIiwiQW1vdW50IjoiODcuMzAiLCJJbnRlZ3JhbCI6IjAiLCJMb2dpbk1hcmsiOiJINSIsIkxvZ2luVGltZSI6IjgvMjkvMjAyNiAxMjowMTo0OSBQTSIsIjxvZ2luSVBBZGRyZXNzIjoiNDUuNDEuMTA0LjI0MCIsImRiTnVtYmVyIjoiMCIsIklzdmFsaWRhdG9yIjoiMCIsIktleUNvZGUiOiIzMjMzMiIsIlRva2VuVHlwZSI6IkFjY2Vzc19Ub2tlbiIsImPhG9uZVR5cGUiOiIwIiwiVXNlclR5cGUiOiIwIiwiVXNlclR5c2UyOiIiLCJpc3MiOiJqd3RJc3N1ZXIiOiJhdWQiOiJsb3R0ZXJ5VGlja2V0In0.ZL0Y9gexUTCsKwWeZhCLAAw8AABEYJt0GnIzIviMG4g",
         "content-type": "application/json;charset=UTF-8",
         "origin": "https://6win598.com",
         "referer": "https://6win598.com/",
@@ -202,5 +222,5 @@ if __name__ == "__main__":
     bot_thread.daemon = True
     bot_thread.start()
     
-    port = int(os.environ.get("PORT", 10000))
+    , port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
