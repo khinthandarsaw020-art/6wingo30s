@@ -20,25 +20,25 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Master Agent AI Bot (High-Precision Prediction Optimizer) is Running 24/7!"
+    return "Pro Trading Strategy Dual-Agent AI Bot is Running 24/7!"
 
-class MasterAgent:
+class DualAgentEnsemble:
     def __init__(self):
         self.window = deque(maxlen=7)
         
-        # 💰 မူလ Martingale Flow (နိုင်မှသာ 1x သို့ ပြန်ဆင်းမည်)
-        self.martingale_steps = [1, 2, 4, 8, 16, 32]
-        self.current_step = 0
+        # 💰 Infinite Martingale Flow (1x, 2x, 4x, 8x, 16x, 32x, 64x, 128x ... အဆုံးမရှိတက်မည်၊ နိုင်မှသာ 1x သို့ ပြန်ဆင်းမည်)
+        self.current_step = 0 # 0 ဆိုသည်မှာ 1x ဖြစ်သည် (Index အလိုက် မြှောက်မည်)
         
         self.active_prediction = None
         self.last_state = None
         
-        # 🎯 Prediction Accuracy မြင့်မားစေရန် Learning Rate ကို မြှင့်တင်ထားခြင်း
-        self.trend_threshold = 0.58
-        self.lr = 0.3  # AI မှ အမှား/အမှန်ကို ပိုမိုမြန်ဆန်ပြင်းထန်စွာ သင်ယူစေရန်
-        self.epsilon = 0.05
-        
+        # 🧠 Trading Strategy Settings
+        self.lr = 0.35
         self.q_table = self.load_q_table()
+
+    def get_current_multiplier(self):
+        # Step 0 = 1x, Step 1 = 2x, Step 2 = 4x, Step 3 = 8x, Step 4 = 16x, Step 5 = 32x, Step 6 = 64x, Step 7 = 128x ...
+        return 2 ** self.current_step
 
     def load_q_table(self):
         headers = {
@@ -52,7 +52,7 @@ class MasterAgent:
                 q_dict = {}
                 for row in data:
                     q_dict[row['state']] = row['actions']
-                print(f"📂 Supabase မှ Master Agent ၏ မှတ်ဉာဏ်များ ({len(q_dict)} states) ကို ဖတ်ရှုပြီးပါပြီ။")
+                print(f"📂 Supabase မှ Strategy Memory ({len(q_dict)} states) ကို ဖတ်ရှုပြီးပါပြီ။")
                 return q_dict
         except Exception as e:
             print(f"⚠️ Supabase မှ ဖတ်ရာတွင် အမှားရှိသည်။: {e}")
@@ -90,7 +90,6 @@ class MasterAgent:
             self.q_table[state] = {"Big": 0.0, "Small": 0.0}
         
         actions = self.q_table[state]
-        # Level 1 to 3 အတွင်း အမှန်ဆုံးဖြစ်စေရန် Q-value အမြင့်ဆုံးဘက်ကို တိကျစွာ ရွေးချယ်မည်
         if actions["Big"] > actions["Small"]:
             return "Big"
         elif actions["Small"] > actions["Big"]:
@@ -101,33 +100,63 @@ class MasterAgent:
         if state not in self.q_table:
             self.q_table[state] = {"Big": 0.0, "Small": 0.0}
         old_q = self.q_table[state][action]
-        
-        # 🧠 Level 1-3 အတွင်း Winrate မြင့်မားစေရန် Reward/Penalty အလေးချိန်ကို မြှင့်တင်ထားသည်
         self.q_table[state][action] = old_q + self.lr * (reward - old_q)
         self.save_q_table(state, self.q_table[state])
 
+    # 📈 Strategy 1: Exponential Momentum (Trend Specialist)
+    def agent_trend_momentum(self, recent_list):
+        weights = [1.0, 1.2, 1.5, 1.8, 2.2, 2.6, 3.0]
+        score_big = 0
+        score_small = 0
+        total_weight = sum(weights[-len(recent_list):])
+        
+        for i, val in enumerate(recent_list):
+            w = weights[len(weights) - len(recent_list) + i]
+            if str(val).lower() == "big":
+                score_big += w
+            else:
+                score_small += w
+                
+        big_ratio = score_big / total_weight
+        small_ratio = score_small / total_weight
+        
+        if big_ratio >= 0.60:
+            return "Big", f"EMA Uptrend ({big_ratio*100:.0f}%)"
+        elif small_ratio >= 0.60:
+            return "Small", f"EMA Downtrend ({small_ratio*100:.0f}%)"
+        return None, "EMA Neutral"
+
+    # 📉 Strategy 2: Mean Reversion (Sideways/Correction Specialist)
+    def agent_mean_reversion(self, recent_list, state):
+        last_three = [str(x).lower() for x in recent_list[-3:]]
+        
+        if last_three.count("big") == 3:
+            return "Small", "Mean Reversion (Overbought Correction)"
+        elif last_three.count("small") == 3:
+            return "Big", "Mean Reversion (Oversold Correction)"
+        else:
+            q_act = self.get_q_action(state)
+            if q_act:
+                return q_act, "Q-Table Reversion Memory"
+        return None, "Reversion Standby"
+
     def analyze_round(self, period, current_result):
-        # 1. ရလဒ်စစ်ဆေးပြီး AI Prediction ကို အချိန်နဲ့တပြေးညီ အပြင်းစား Update လုပ်ခြင်း
+        short_period = "..." + str(period)[-3:] if len(str(period)) >= 3 else "..." + str(period)
+
+        # 1. Learning & Reward Processing
         if self.active_prediction and self.last_state:
             predicted = self.active_prediction
             reward = 0
             
             if current_result.lower() == predicted.lower():
-                # 🏆 နိုင်လျှင် အမြင့်ဆုံး Reward ပေးပြီး Martingale ကို 1x (Step 1) သို့ ပြန်ဆင်းမည်
-                reward = 3.0
-                self.current_step = 0
-                multiplier = self.martingale_steps[self.current_step]
-                self.send_telegram(f"✅ <b>MASTER WIN!</b> Period {period} ({current_result}) | 🔄 Reset to Step 1 ({multiplier}x)")
+                reward = 4.0 if self.current_step == 0 else 3.0
+                self.current_step = 0  # 🏆 နိုင်မှသာ Step 1 (0 index) သို့ ပြန်ဆင်းမည်
+                self.send_telegram(f"✅ <b>ENSEMBLE WIN! Period: {short_period}</b>")
             else:
-                # ❌ ရှုံးလျှင် ပြင်းထန်သော Penalty (-3.0) ပေးကာ Q-Table ကို ချက်ချင်းပြင်ဆင်ခိုင်းမည်
-                reward = -3.0
-                self.current_step += 1
-                if self.current_step >= len(self.martingale_steps):
-                    self.current_step = 0  # ကန့်သတ်ချက်အရ ပြန်စမည်
-                multiplier = self.martingale_steps[self.current_step]
-                self.send_telegram(f"❌ <b>MASTER LOSS!</b> Period {period} ({current_result}) | 📈 Martingale Step {self.current_step + 1} ({multiplier}x)")
+                reward = -3.5 - (self.current_step * 0.5)
+                self.current_step += 1  # ❌ ရှုံးလျှင် အဆုံးမရှိ ဆက်တက်မည် (6x, 7x, 8x...)
+                self.send_telegram(f"❌ <b>ENSEMBLE LOSS! Period: {short_period}</b>")
             
-            # Q-Table ကို အမှန်/အမှားပေါ်မူတည်၍ အပြင်းစား Update လုပ်ခြင်း
             self.update_q_table(self.last_state, predicted, reward)
             self.active_prediction = None
 
@@ -137,73 +166,68 @@ class MasterAgent:
             return
 
         recent_list = list(self.window)
-        total_rounds = len(recent_list)
-        big_count = sum(1 for x in recent_list if str(x).lower() == "big")
-        small_count = total_rounds - big_count
-        
-        big_ratio = big_count / total_rounds
-        small_ratio = small_count / total_rounds
-        pressure_val = abs(big_ratio - small_ratio)
+        state_key = self.get_state_key()
 
-        regime = "Sideways"
-        strategy_prediction = None
+        # Agent နှစ်ကောင်၏ Strategy ရလဒ်များကို ရယူခြင်း
+        trend_pred, trend_desc = self.agent_trend_momentum(recent_list)
+        revert_pred, revert_desc = self.agent_mean_reversion(recent_list, state_key)
 
-        # 2. Master Regime Classifier (Uptrend / Downtrend / Sideways) - High Accuracy Mode
-        if big_ratio >= self.trend_threshold:
-            regime = "Uptrend (Bullish)"
-            strategy_prediction = "Big"
-        elif small_ratio >= self.trend_threshold:
-            regime = "Downtrend (Bearish)"
-            strategy_prediction = "Small"
-        else:
-            regime = "Sideways (Range-Bound)"
-            # Sideways တွင် ဇဝေဇဝါမဖြစ်စေဘဲ Level 1-3 အတွင်း Win ရန် Cloud Memory (Q-Table) ကို ဦးစားပေးမည်
-            current_state = self.get_state_key()
-            q_action = self.get_q_action(current_state)
-            if q_action:
-                strategy_prediction = q_action
+        final_prediction = None
+        market_regime = ""
+
+        # Martingale Step မြင့်လာပါက ပိုမိုတင်းကျပ်သော စစ်ထုတ်မှုကို သုံးမည် (ဥပမာ Step 3 - 8x ကျော်လာလျှင်)
+        if self.current_step >= 3:
+            if trend_pred and trend_pred == revert_pred:
+                final_prediction = trend_pred
+                market_regime = f"Strict Strategy Safe Guard ({trend_desc})"
             else:
-                strategy_prediction = "Small" if recent_list[-1] == "Big" else "Big"
-
-        # 3. Final High-Precision Prediction Generation
-        current_state = self.get_state_key()
-        q_prediction = self.get_q_action(current_state)
-
-        # Strategy နှင့် Q-Table ကို ပေါင်းစပ်၍ အမှန်ကန်ဆုံး Prediction ကို ထုတ်မည်
-        final_prediction = strategy_prediction if strategy_prediction else q_prediction
+                final_prediction = None
+                market_regime = "High Step Strategy Caution (Waiting)"
+        else:
+            if trend_pred and trend_pred == revert_pred:
+                final_prediction = trend_pred
+                market_regime = f"Strong Strategy Consensus ({trend_desc})"
+            elif trend_pred and not revert_pred:
+                final_prediction = trend_pred
+                market_regime = f"Momentum Dominant ({trend_desc})"
+            elif not trend_pred and revert_pred:
+                final_prediction = revert_pred
+                market_regime = f"Reversion Play ({revert_desc})"
+            else:
+                final_prediction = None
+                market_regime = "Strategy Conflict (Waiting)"
 
         if final_prediction:
-            self.last_state = current_state
+            self.last_state = state_key
             self.active_prediction = final_prediction
-            current_multiplier = self.martingale_steps[self.current_step]
+            current_multiplier = self.get_current_multiplier()
             
             msg = (
-                f"👑 <b>MASTER AGENT OPTIMIZER | Period: {period}</b>\n\n"
-                f"📈 Market Regime: <b>{regime}</b>\n"
-                f"⚖️ Pressure Val: <b>{pressure_val:.2f}</b>\n"
-                f"🧠 Cloud Memory: <b>Active ({len(self.q_table)} states)</b>\n\n"
-                f"🎯 <b>ခန့်မှန်းချက် (Prediction):</b> <b>{final_prediction.upper()}</b>\n"
+                f"👑 <b>PRO STRATEGY ENSEMBLE | Period: {short_period}</b>\n\n"
+                f"📊 Market Regime: <b>{market_regime}</b>\n"
+                f"🤖 Agent 1 (Momentum): <b>{trend_pred if trend_pred else 'Standby'}</b>\n"
+                f"🤖 Agent 2 (Reversion): <b>{revert_pred if revert_pred else 'Standby'}</b>\n\n"
+                f"🎯 <b>အတည်ပြု Signal:</b> <b>{final_prediction.upper()}</b>\n"
                 f"💰 <b>Martingale Flow:</b> Step {self.current_step + 1} ({current_multiplier}x)"
             )
             self.send_telegram(msg)
         else:
             wait_msg = (
-                f"⏳ <b>AI WAITING | Period: {period}</b>\n\n"
-                f"📊 Market Regime: <b>{regime} (Unclear)</b>\n"
-                f"⚖️ Pressure Val: <b>{pressure_val:.2f}</b>\n"
-                f"💬 <i>Level 1-3 အတွင်း Winrate အမြင့်ဆုံးဖြစ်စေရန် စောင့်ဆိုင်းနေပါသည်...</i>"
+                f"⏳ <b>STRATEGY WAITING | Period: {short_period}</b>\n\n"
+                f"📊 Status: <b>{market_regime}</b>\n"
+                f"💬 <i>ပရိုဖက်ရှင်နယ် Strategy များ ချိန်ကိုက်နေဆဲဖြစ်ပါသည်...</i>"
             )
             self.send_telegram(wait_msg)
 
 def run_bot():
-    agent = MasterAgent()
+    agent = DualAgentEnsemble()
     last_period = ""
-    print("👑 Master Agent High-Precision Bot စတင် အလုပ်လုပ်နေပါပြီ...")
+    print("👑 Pro Strategy Dual-Agent Bot စတင် အလုပ်လုပ်နေပါပြီ...")
     
     url = "https://6lotteryapi.com/api/webapi/GetNoaverageEmerdList"
     headers = {
-        "accept": "application/json, text/plain, */*",
-        "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOiIxNzg3OTgxNTA5IiwibmJmIjoiMTc4Nzk4MTUwOSIsImV4cCI6IjE3ODc5ODMzMDkiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL2V4cGlyYXRpb24iOiI4LzI5LzIwMjYgMTI6MzE6NDkgUE0iLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBY2Nlc3NfVG9rZW4iLCJVc2VySWQiOiIxMDEyMjEzIiwiVXNlck5hbWUiOiI5NTk3NDA5MzkzNzAiLCJVc2VyUGhvdG8iOiI5IiwiTmlja05hbWUiOiJUaetsR3lpIiwiQW1vdW50IjoiODcuMzAiLCJJbnRlZ3JhbCI6IjAiLCJMb2dpbk1hcmsiOiJINSIsIkxvZ2luVGltZSI6IjgvMjkvMjAyNiAxMjowMTo0OSBQTSIsIjxvZ2luSVBBZGRyZXNzIjoiNDUuNDEuMTA0LjI0MCIsImRiTnVtYmVyIjoiMCIsIklzdmFsaWRhdG9yIjoiMCIsIktleUNvZGUiOiIzMjMzMiIsIlRva2VuVHlwZSI6ImFjY2Vzc19Ub2tlbiIsIlBob25lVHlwZSI6IjAiLCJVc2VyVHlwZSI6IjAiLCJVc2VyTmFtZTIiOiIuIiwiaXNzIjoiand0SXNzdWVyIiwsYXVkIjoibG90dGVyeVRpY2tldCJ9.ZL0Y9gexUTCsKwWeZhCLAAw8AABEYJt0GnIzIviMG4g",
+        "accept": "application/json, text/plain, *_**",
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOiIxNzg3OTgxNTA5IiwibmJmIjoiMTc4Nzk4MTUwOSIsImV4cCI6IjE3ODc5ODMzMDkiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL2V4cGlyYXRpb24iOiI4LzI5LzIwMjYgMTI6MzE6NDkgUE0iLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBY2Nlc3NfVG9rZW4iLCJVc2VySWQiOiIxMDEyMjEzIiwiVXNlck5hbWUiOiI5NTk3NDA5MzkzNzAiLCJVc2VyUGhvdG8iOiI5IiwiTmlja05hbWUiOiJUaetsR3lpIiwiQW1vdW50IjoiODcuMzAiLCJJbnRlZ3JhbCI6IjAiLCJMb2dpbk1hcmsiOiJINSIsIkxvZ2luVGltZSI6IjgvMjkvMjAyNiAxMjowMTo0OSBQTSIsIjxvZ2luSVBBZGRyZXNzIjoiNDUuNDEuMTA0LjI0MCIsImRiTnVtYmVyIjoiMCIsIklzdmFsaWRhdG9yIjoiMCIsIktleUNvZGUiOiIzMjMzMiIsIlRva2VuVHlwZSI6IkFjY2Vzc19Ub2tlbiIsIlBob25lVHlwZSI6IjAiLCJVc2VyVHlwZSI6IjAiLCJVc2VyTmFtZ2UiOiIuIiwiaXNzIjoiand0SXNzdWVyIiwiYXVkIjoibG90dGVyeVRpY2tldCJ9.ZL0Y9gexUTCsKwWeZhCLAAw8AABEYJt0GnIzIviMG4g",
         "content-type": "application/json;charset=UTF-8",
         "origin": "https://6win598.com",
         "referer": "https://6win598.com/",
@@ -218,7 +242,7 @@ def run_bot():
     
     while True:
         try:
-            response = requests.post(url, headers=headers, json=payload, timeout=3)
+            response = requests.post(url, headers=headers, json, timeout=3)
             data = response.json()
             list_data = data.get("data", {}).get("list", [])
             if len(list_data) > 0:
