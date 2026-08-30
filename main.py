@@ -10,7 +10,7 @@ from flask import Flask
 # Telegram နဲ့ Supabase အချက်အလက်များ
 # ==========================================
 TELEGRAM_TOKEN = "8782457950:AAHbd-J29Y0fKhcBOHbSnn1d4z4vhiDQLKg" 
-CHAT_ID = "1003917249143"
+CHAT_ID = "-1003917249143"
 
 SUPABASE_URL = "https://xdhhakpsonirkpimctlw.supabase.co"
 SUPABASE_KEY = "sb_publishable_bVJj1lqSAsIQ1kQ8Ae2vAQ_o3yCjDeA"
