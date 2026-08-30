@@ -20,19 +20,23 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Multi-Strategy Wingo AI Bot with Supabase is Running 24/7!"
+    return "Master Agent AI Bot (High-Precision Prediction Optimizer) is Running 24/7!"
 
-class PersistentHybridAgent:
+class MasterAgent:
     def __init__(self):
         self.window = deque(maxlen=7)
+        
+        # 💰 မူလ Martingale Flow (နိုင်မှသာ 1x သို့ ပြန်ဆင်းမည်)
         self.martingale_steps = [1, 2, 4, 8, 16, 32]
         self.current_step = 0
+        
         self.active_prediction = None
         self.last_state = None
         
-        self.best_threshold = 0.55  # Threshold ကို လျှော့ချထား၍ Waiting နည်းစေမည်
-        self.lr = 0.1
-        self.epsilon = 0.1
+        # 🎯 Prediction Accuracy မြင့်မားစေရန် Learning Rate ကို မြှင့်တင်ထားခြင်း
+        self.trend_threshold = 0.58
+        self.lr = 0.3  # AI မှ အမှား/အမှန်ကို ပိုမိုမြန်ဆန်ပြင်းထန်စွာ သင်ယူစေရန်
+        self.epsilon = 0.05
         
         self.q_table = self.load_q_table()
 
@@ -48,7 +52,7 @@ class PersistentHybridAgent:
                 q_dict = {}
                 for row in data:
                     q_dict[row['state']] = row['actions']
-                print(f"📂 Supabase မှ AI ရဲ့ မှတ်ဉာဏ်များ ({len(q_dict)} states) ကို ဖတ်ရှုပြီးပါပြီ။")
+                print(f"📂 Supabase မှ Master Agent ၏ မှတ်ဉာဏ်များ ({len(q_dict)} states) ကို ဖတ်ရှုပြီးပါပြီ။")
                 return q_dict
         except Exception as e:
             print(f"⚠️ Supabase မှ ဖတ်ရာတွင် အမှားရှိသည်။: {e}")
@@ -86,6 +90,7 @@ class PersistentHybridAgent:
             self.q_table[state] = {"Big": 0.0, "Small": 0.0}
         
         actions = self.q_table[state]
+        # Level 1 to 3 အတွင်း အမှန်ဆုံးဖြစ်စေရန် Q-value အမြင့်ဆုံးဘက်ကို တိကျစွာ ရွေးချယ်မည်
         if actions["Big"] > actions["Small"]:
             return "Big"
         elif actions["Small"] > actions["Big"]:
@@ -96,28 +101,33 @@ class PersistentHybridAgent:
         if state not in self.q_table:
             self.q_table[state] = {"Big": 0.0, "Small": 0.0}
         old_q = self.q_table[state][action]
-        self.q_table[state][action] = old_q + self.lr * (reward - old_q)
         
+        # 🧠 Level 1-3 အတွင်း Winrate မြင့်မားစေရန် Reward/Penalty အလေးချိန်ကို မြှင့်တင်ထားသည်
+        self.q_table[state][action] = old_q + self.lr * (reward - old_q)
         self.save_q_table(state, self.q_table[state])
 
     def analyze_round(self, period, current_result):
-        # 1. ရလဒ်ထွက်ပြီးပါက AI မှတ်ဉာဏ် (Q-Table) ကို Update လုပ်ခြင်း
+        # 1. ရလဒ်စစ်ဆေးပြီး AI Prediction ကို အချိန်နဲ့တပြေးညီ အပြင်းစား Update လုပ်ခြင်း
         if self.active_prediction and self.last_state:
             predicted = self.active_prediction
             reward = 0
             
             if current_result.lower() == predicted.lower():
-                reward = 1.5
+                # 🏆 နိုင်လျှင် အမြင့်ဆုံး Reward ပေးပြီး Martingale ကို 1x (Step 1) သို့ ပြန်ဆင်းမည်
+                reward = 3.0
                 self.current_step = 0
-                self.send_telegram(f"✅ <b>HYBRID WIN!</b> Period {period} တွင် {current_result} ထွက်၍ အနိုင်ရပါသည်။ Step 1 သို့ ပြန်မည်။")
+                multiplier = self.martingale_steps[self.current_step]
+                self.send_telegram(f"✅ <b>MASTER WIN!</b> Period {period} ({current_result}) | 🔄 Reset to Step 1 ({multiplier}x)")
             else:
-                reward = -1.5
+                # ❌ ရှုံးလျှင် ပြင်းထန်သော Penalty (-3.0) ပေးကာ Q-Table ကို ချက်ချင်းပြင်ဆင်ခိုင်းမည်
+                reward = -3.0
                 self.current_step += 1
                 if self.current_step >= len(self.martingale_steps):
-                    self.send_telegram("⚠️ <b>6x HARD STOP!</b> ၆ ကြိမ် ဆက်တိုက် ရှုံးသွားပါသည်။ Step 1 သို့ Reset ချပါသည်။")
-                    self.current_step = 0
-                self.send_telegram(f"❌ <b>HYBRID LOSS!</b> Period {period} တွင် {current_result} ထွက်သွားပါသည်။")
+                    self.current_step = 0  # ကန့်သတ်ချက်အရ ပြန်စမည်
+                multiplier = self.martingale_steps[self.current_step]
+                self.send_telegram(f"❌ <b>MASTER LOSS!</b> Period {period} ({current_result}) | 📈 Martingale Step {self.current_step + 1} ({multiplier}x)")
             
+            # Q-Table ကို အမှန်/အမှားပေါ်မူတည်၍ အပြင်းစား Update လုပ်ခြင်း
             self.update_q_table(self.last_state, predicted, reward)
             self.active_prediction = None
 
@@ -126,7 +136,6 @@ class PersistentHybridAgent:
         if len(self.window) < 7:
             return
 
-        # 2. Multi-Strategy Market Analysis (Uptrend, Downtrend, Sideways, Extension, Retracement)
         recent_list = list(self.window)
         total_rounds = len(recent_list)
         big_count = sum(1 for x in recent_list if str(x).lower() == "big")
@@ -139,69 +148,62 @@ class PersistentHybridAgent:
         regime = "Sideways"
         strategy_prediction = None
 
-        # Strategy A: Uptrend / Downtrend (Pressure based)
-        if big_ratio >= self.best_threshold:
-            regime = "Uptrend (Trend Following)"
+        # 2. Master Regime Classifier (Uptrend / Downtrend / Sideways) - High Accuracy Mode
+        if big_ratio >= self.trend_threshold:
+            regime = "Uptrend (Bullish)"
             strategy_prediction = "Big"
-        elif small_ratio >= self.best_threshold:
-            regime = "Downtrend (Trend Following)"
+        elif small_ratio >= self.trend_threshold:
+            regime = "Downtrend (Bearish)"
             strategy_prediction = "Small"
+        else:
+            regime = "Sideways (Range-Bound)"
+            # Sideways တွင် ဇဝေဇဝါမဖြစ်စေဘဲ Level 1-3 အတွင်း Win ရန် Cloud Memory (Q-Table) ကို ဦးစားပေးမည်
+            current_state = self.get_state_key()
+            q_action = self.get_q_action(current_state)
+            if q_action:
+                strategy_prediction = q_action
+            else:
+                strategy_prediction = "Small" if recent_list[-1] == "Big" else "Big"
 
-        # Strategy B: Extension (Streak continuation)
-        elif recent_list[-1] == recent_list[-2] == recent_list[-3]:
-            regime = "Extension (Momentum Streak)"
-            strategy_prediction = recent_list[-1]  # ဆက်တိုက်သွားမည့်ဘက်ကို လိုက်မည်
-
-        # Strategy C: Retracement (Pullback after streak)
-        elif recent_list[-1] == recent_list[-2] and recent_list[-2] != recent_list[-3]:
-            regime = "Retracement (Pullback Check)"
-            strategy_prediction = "Small" if recent_list[-1] == "Big" else "Big"
-
-        # Strategy D: Sideways (Range-bound mean reversion / Alternating)
-        elif recent_list[-1] != recent_list[-2] and recent_list[-2] != recent_list[-3]:
-            regime = "Sideways (Alternating Reversion)"
-            strategy_prediction = "Small" if recent_list[-1] == "Big" else "Big"
-
-        # 3. Q-Table (Cloud Memory) ပေါင်းစပ်ခြင်း
+        # 3. Final High-Precision Prediction Generation
         current_state = self.get_state_key()
         q_prediction = self.get_q_action(current_state)
 
-        # Signal အမြનဆုံးထွက်စေရန် Strategy Prediction သို့မဟုတ် Q-prediction ကို အသုံးပြုခြင်း (Waiting လျှော့ချရန်)
+        # Strategy နှင့် Q-Table ကို ပေါင်းစပ်၍ အမှန်ကန်ဆုံး Prediction ကို ထုတ်မည်
         final_prediction = strategy_prediction if strategy_prediction else q_prediction
 
         if final_prediction:
             self.last_state = current_state
             self.active_prediction = final_prediction
-            multiplier = self.martingale_steps[self.current_step]
+            current_multiplier = self.martingale_steps[self.current_step]
             
             msg = (
-                f"🔥 <b>MULTI-STRATEGY HYBRID AI | Period: {period}</b>\n\n"
+                f"👑 <b>MASTER AGENT OPTIMIZER | Period: {period}</b>\n\n"
                 f"📈 Market Regime: <b>{regime}</b>\n"
                 f"⚖️ Pressure Val: <b>{pressure_val:.2f}</b>\n"
                 f"🧠 Cloud Memory: <b>Active ({len(self.q_table)} states)</b>\n\n"
-                f"🎯 <b>လောင်းရမည့်ဘက်:</b> {final_prediction.upper()}\n"
-                f"💰 <b>Martingale:</b> Step {self.current_step + 1} ({multiplier}x)"
+                f"🎯 <b>ခန့်မှန်းချက် (Prediction):</b> <b>{final_prediction.upper()}</b>\n"
+                f"💰 <b>Martingale Flow:</b> Step {self.current_step + 1} ({current_multiplier}x)"
             )
             self.send_telegram(msg)
         else:
-            # အလွန်ရှားပါးမှသာ Waiting ပြမည် (Threshold များကို ဖြေလျှော့ထားသဖြင့် Waiting အလွန်နည်းမည်)
             wait_msg = (
                 f"⏳ <b>AI WAITING | Period: {period}</b>\n\n"
-                f"📊 Market Trend: <b>{regime} (Neutral)</b>\n"
+                f"📊 Market Regime: <b>{regime} (Unclear)</b>\n"
                 f"⚖️ Pressure Val: <b>{pressure_val:.2f}</b>\n"
-                f"💬 <i>အခြေအနေ မသေချာသေးပါသဖြင့် ခဏစောင့်ဆိုင်းနေပါသည်...</i>"
+                f"💬 <i>Level 1-3 အတွင်း Winrate အမြင့်ဆုံးဖြစ်စေရန် စောင့်ဆိုင်းနေပါသည်...</i>"
             )
             self.send_telegram(wait_msg)
 
 def run_bot():
-    agent = PersistentHybridAgent()
+    agent = MasterAgent()
     last_period = ""
-    print("🚀 Multi-Strategy Supabase Hybrid AI Agent စတင် အလုပ်လုပ်နေပါပြီ...")
+    print("👑 Master Agent High-Precision Bot စတင် အလုပ်လုပ်နေပါပြီ...")
     
     url = "https://6lotteryapi.com/api/webapi/GetNoaverageEmerdList"
     headers = {
         "accept": "application/json, text/plain, */*",
-        "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOiIxNzg3OTgxNTA5IiwibmJmIjoiMTc4Nzk4MTUwOSIsImV4cCI6IjE3ODc5ODMzMDkiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL2V4cGlyYXRpb24iOiI4LzI5LzIwMjYgMTI6MzE6NDkgUE0iLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBY2Nlc3NfVG9rZW4iLCJVc2VySWQiOiIxMDEyMjEzIiwiVXNlck5hbWUiOiI5NTk3NDA5MzkzNzAiLCJVc2VyUGhvdG8iOiI5IiwiTmlja05hbWUiOiJUaetsR3lpIiwiQW1vdW50IjoiODcuMzAiLCJJbnRlZ3JhbCI6IjAiLCJMb2dpbk1hcmsiOiJINSIsIkxvZ2luVGltZSI6IjgvMjkvMjAyNiAxMjowMTo0OSBQTSIsIjxvZ2luSVBBZGRyZXNzIjoiNDUuNDEuMTA0LjI0MCIsImRiTnVtYmVyIjoiMCIsIklzdmFsaWRhdG9yIjoiMCIsIktleUNvZGUiOiIzMjMzMiIsIlRva2VuVHlwZSI6IkFjY2Vzc19Ub2tlbiIsImPhG9uZVR5cGUiOiIwIiwiVXNlcmsetTypeIoiOiIwIiwiVXNlck5hbWUyIjoiIiwiaXNzIjoiand0SXNzdWVyIiwiYXVkIjoibG90dGVyeVRpY2tldCJ9.ZL0Y9gexUTCsKwWeZhCLAAw8AABEYJt0GnIzIviMG4g",
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOiIxNzg3OTgxNTA5IiwibmJmIjoiMTc4Nzk4MTUwOSIsImV4cCI6IjE3ODc5ODMzMDkiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL2V4cGlyYXRpb24iOiI4LzI5LzIwMjYgMTI6MzE6NDkgUE0iLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBY2Nlc3NfVG9rZW4iLCJVc2VySWQiOiIxMDEyMjEzIiwiVXNlck5hbWUiOiI5NTk3NDA5MzkzNzAiLCJVc2VyUGhvdG8iOiI5IiwiTmlja05hbWUiOiJUaetsR3lpIiwiQW1vdW50IjoiODcuMzAiLCJJbnRlZ3JhbCI6IjAiLCJMb2dpbk1hcmsiOiJINSIsIkxvZ2luVGltZSI6IjgvMjkvMjAyNiAxMjowMTo0OSBQTSIsIjxvZ2luSVBBZGRyZXNzIjoiNDUuNDEuMTA0LjI0MCIsImRiTnVtYmVyIjoiMCIsIklzdmFsaWRhdG9yIjoiMCIsIktleUNvZGUiOiIzMjMzMiIsIlRva2VuVHlwZSI6ImFjY2Vzc19Ub2tlbiIsIlBob25lVHlwZSI6IjAiLCJVc2VyVHlwZSI6IjAiLCJVc2VyTmFtZTIiOiIuIiwiaXNzIjoiand0SXNzdWVyIiwsYXVkIjoibG90dGVyeVRpY2tldCJ9.ZL0Y9gexUTCsKwWeZhCLAAw8AABEYJt0GnIzIviMG4g",
         "content-type": "application/json;charset=UTF-8",
         "origin": "https://6win598.com",
         "referer": "https://6win598.com/",
