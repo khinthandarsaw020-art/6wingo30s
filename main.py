@@ -26,8 +26,8 @@ class DualAgentEnsemble:
     def __init__(self):
         self.window = deque(maxlen=7)
         
-        # 💰 Infinite Martingale Flow (1x, 2x, 4x, 8x, 16x, 32x, 64x, 128x ... အဆုံးမရှိတက်မည်၊ နိုင်မှသာ 1x သို့ ပြန်ဆင်းမည်)
-        self.current_step = 0 # 0 ဆိုသည်မှာ 1x ဖြစ်သည် (Index အလိုက် မြှောက်မည်)
+        # 💰 Infinite Martingale Flow (1x, 2x, 4x, 8x, 16x, 32x ... အဆုံးမရှိတက်မည်၊ နိုင်မှသာ 1x သို့ ပြန်ဆင်းမည်)
+        self.current_step = 0 
         
         self.active_prediction = None
         self.last_state = None
@@ -37,7 +37,6 @@ class DualAgentEnsemble:
         self.q_table = self.load_q_table()
 
     def get_current_multiplier(self):
-        # Step 0 = 1x, Step 1 = 2x, Step 2 = 4x, Step 3 = 8x, Step 4 = 16x, Step 5 = 32x, Step 6 = 64x, Step 7 = 128x ...
         return 2 ** self.current_step
 
     def load_q_table(self):
@@ -154,7 +153,7 @@ class DualAgentEnsemble:
                 self.send_telegram(f"✅ <b>ENSEMBLE WIN! Period: {short_period}</b>")
             else:
                 reward = -3.5 - (self.current_step * 0.5)
-                self.current_step += 1  # ❌ ရှုံးလျှင် အဆုံးမရှိ ဆက်တက်မည် (6x, 7x, 8x...)
+                self.current_step += 1  # ❌ ရှုံးလျှင် အဆုံးမရှိ ဆက်တက်မည်
                 self.send_telegram(f"❌ <b>ENSEMBLE LOSS! Period: {short_period}</b>")
             
             self.update_q_table(self.last_state, predicted, reward)
@@ -168,14 +167,12 @@ class DualAgentEnsemble:
         recent_list = list(self.window)
         state_key = self.get_state_key()
 
-        # Agent နှစ်ကောင်၏ Strategy ရလဒ်များကို ရယူခြင်း
         trend_pred, trend_desc = self.agent_trend_momentum(recent_list)
         revert_pred, revert_desc = self.agent_mean_reversion(recent_list, state_key)
 
         final_prediction = None
         market_regime = ""
 
-        # Martingale Step မြင့်လာပါက ပိုမိုတင်းကျပ်သော စစ်ထုတ်မှုကို သုံးမည် (ဥပမာ Step 3 - 8x ကျော်လာလျှင်)
         if self.current_step >= 3:
             if trend_pred and trend_pred == revert_pred:
                 final_prediction = trend_pred
@@ -226,8 +223,8 @@ def run_bot():
     
     url = "https://6lotteryapi.com/api/webapi/GetNoaverageEmerdList"
     headers = {
-        "accept": "application/json, text/plain, *_**",
-        "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOiIxNzg3OTgxNTA5IiwibmJmIjoiMTc4Nzk4MTUwOSIsImV4cCI6IjE3ODc5ODMzMDkiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL2V4cGlyYXRpb24iOiI4LzI5LzIwMjYgMTI6MzE6NDkgUE0iLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBY2Nlc3NfVG9rZW4iLCJVc2VySWQiOiIxMDEyMjEzIiwiVXNlck5hbWUiOiI5NTk3NDA5MzkzNzAiLCJVc2VyUGhvdG8iOiI5IiwiTmlja05hbWUiOiJUaetsR3lpIiwiQW1vdW50IjoiODcuMzAiLCJJbnRlZ3JhbCI6IjAiLCJMb2dpbk1hcmsiOiJINSIsIkxvZ2luVGltZSI6IjgvMjkvMjAyNiAxMjowMTo0OSBQTSIsIjxvZ2luSVBBZGRyZXNzIjoiNDUuNDEuMTA0LjI0MCIsImRiTnVtYmVyIjoiMCIsIklzdmFsaWRhdG9yIjoiMCIsIktleUNvZGUiOiIzMjMzMiIsIlRva2VuVHlwZSI6IkFjY2Vzc19Ub2tlbiIsIlBob25lVHlwZSI6IjAiLCJVc2VyVHlwZSI6IjAiLCJVc2VyTmFtZ2UiOiIuIiwiaXNzIjoiand0SXNzdWVyIiwiYXVkIjoibG90dGVyeVRpY2tldCJ9.ZL0Y9gexUTCsKwWeZhCLAAw8AABEYJt0GnIzIviMG4g",
+        "accept": "application/json, text/plain, */*",
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOiIxNzg3OTgxNTA5IiwibmJmIjoiMTc4Nzk4MTUwOSIsImV4cCI6IjE3ODc5ODMzMDkiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL2V4cGlyYXRpb24iOiI4LzI5LzIwMjYgMTI6MzE6NDkgUE0iLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBY2Nlc3NfVG9rZW4iLCJVc2VySWQiOiIxMDEyMjEzIiwiVXNlck5hbWUiOiI5NTk3NDA5MzkzNzAiLCJVc2VyUGhvdG8iOiI5IiwiTmlja05hbWUiOiJUaetsR3lpIiwiQW1vdW50IjoiODcuMzAiLCJJbnRlZ3JhbCI6IjAiLCJMb2dpbk1hcmsiOiJINSIsIkxvZ2luVGltZSI6IjgvMjkvMjAyNiAxMjowMTo0OSBQTSIsIjxvZ2luSVBBZGRyZXNzIjoiNDUuNDEuMTA0LjI0MCIsImRiTnVtYmVyIjoiMCIsIklzdmFsaWRhdG9yIjoiMCIsIktleUNvZGUiOiIzMjMzMiIsIlRva2VuVHlwZSI6IkFjY2Vzc19Ub2tlbiIsIjBob25lVHlwZSI6IjAiLCJVc2VyVHlwZSI6IjAiLCJVc2VyTmFtZTIiOiIuIiwiaXNzIjoiand0SXNzdWVyIiwiYXVkIjoibG90dGVyeVRpY2tldCJ9.ZL0Y9gexUTCsKwWeZhCLAAw8AABEYJt0GnIzIviMG4g",
         "content-type": "application/json;charset=UTF-8",
         "origin": "https://6win598.com",
         "referer": "https://6win598.com/",
@@ -242,7 +239,8 @@ def run_bot():
     
     while True:
         try:
-            response = requests.post(url, headers=headers, json, timeout=3)
+            # 🛠️ ပြင်ဆင်ပြီးသောလိုင်း (json=payload ဟု အမှန်ထည့်ထားသည်)
+            response = requests.post(url, headers=headers, json=payload, timeout=3)
             data = response.json()
             list_data = data.get("data", {}).get("list", [])
             if len(list_data) > 0:
