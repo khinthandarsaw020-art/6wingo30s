@@ -20,19 +20,23 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Pro Trading Strategy Dual-Agent AI Bot is Running 24/7!"
+    return "Pro Trading Strategy Dual-Agent AI Bot (Advanced Stats Tracker) Running 24/7!"
 
 class DualAgentEnsemble:
     def __init__(self):
-        self.window = deque(maxlen=7)
-        
-        # 💰 Infinite Martingale Flow (1x, 2x, 4x, 8x, 16x, 32x ... အဆုံးမရှိတက်မည်၊ နိုင်မှသာ 1x သို့ ပြန်ဆင်းမည်)
+        self.window = deque(maxlen=5)
         self.current_step = 0 
-        
         self.active_prediction = None
         self.last_state = None
+        self.is_paused = False  
         
-        # 🧠 Trading Strategy Settings
+        # 📊 Statistics Trackers
+        self.total_signals = 0
+        self.total_wins = 0
+        self.total_losses = 0
+        self.max_martingale_step_reached = 0  # အမြင့်ဆုံးရောက်ခဲ့သော Martingale Step
+        self.wins_per_step = {}               # ဥပမာ- {1: 10, 2: 3, 3: 1} (Step အလိုက် နိုင်သောပွဲရေ)
+
         self.lr = 0.35
         self.q_table = self.load_q_table()
 
@@ -87,7 +91,6 @@ class DualAgentEnsemble:
     def get_q_action(self, state):
         if state not in self.q_table:
             self.q_table[state] = {"Big": 0.0, "Small": 0.0}
-        
         actions = self.q_table[state]
         if actions["Big"] > actions["Small"]:
             return "Big"
@@ -102,58 +105,68 @@ class DualAgentEnsemble:
         self.q_table[state][action] = old_q + self.lr * (reward - old_q)
         self.save_q_table(state, self.q_table[state])
 
-    # 📈 Strategy 1: Exponential Momentum (Trend Specialist)
-    def agent_trend_momentum(self, recent_list):
-        weights = [1.0, 1.2, 1.5, 1.8, 2.2, 2.6, 3.0]
-        score_big = 0
-        score_small = 0
+    def check_momentum_velocity(self, recent_list):
+        if len(recent_list) >= 3:
+            last_three = [str(x).capitalize() for x in recent_list[-3:]]
+            if last_three == ["Big", "Big", "Big"]:
+                return "Big", "Velocity Surge (Strong Streak)"
+            elif last_three == ["Small", "Small", "Small"]:
+                return "Small", "Velocity Surge (Strong Streak)"
+        return None, None
+
+    def get_momentum_score(self, recent_list):
+        weights = [1.0, 1.4, 1.8, 2.3, 3.0]
+        score_big = 0.0
         total_weight = sum(weights[-len(recent_list):])
-        
         for i, val in enumerate(recent_list):
             w = weights[len(weights) - len(recent_list) + i]
-            if str(val).lower() == "big":
+            if str(val).capitalize() == "Big":
                 score_big += w
-            else:
-                score_small += w
-                
-        big_ratio = score_big / total_weight
-        small_ratio = score_small / total_weight
-        
-        if big_ratio >= 0.60:
-            return "Big", f"EMA Uptrend ({big_ratio*100:.0f}%)"
-        elif small_ratio >= 0.60:
-            return "Small", f"EMA Downtrend ({small_ratio*100:.0f}%)"
-        return None, "EMA Neutral"
+        return score_big / total_weight
 
-    # 📉 Strategy 2: Mean Reversion (Sideways/Correction Specialist)
-    def agent_mean_reversion(self, recent_list, state):
-        last_three = [str(x).lower() for x in recent_list[-3:]]
-        
-        if last_three.count("big") == 3:
-            return "Small", "Mean Reversion (Overbought Correction)"
-        elif last_three.count("small") == 3:
-            return "Big", "Mean Reversion (Oversold Correction)"
-        else:
-            q_act = self.get_q_action(state)
-            if q_act:
-                return q_act, "Q-Table Reversion Memory"
-        return None, "Reversion Standby"
+    def get_reversion_score(self, recent_list, state):
+        if len(recent_list) >= 4:
+            last_four = [str(x).capitalize() for x in recent_list[-4:]]
+            if last_four.count("Big") == 4:
+                return 0.15
+            elif last_four.count("Small") == 4:
+                return 0.85
+        q_act = self.get_q_action(state)
+        if q_act == "Big":
+            return 0.65
+        elif q_act == "Small":
+            return 0.35
+        return 0.50
 
     def analyze_round(self, period, current_result):
+        if self.is_paused:
+            return  
+
         short_period = "..." + str(period)[-3:] if len(str(period)) >= 3 else "..." + str(period)
 
-        # 1. Learning & Reward Processing
         if self.active_prediction and self.last_state:
             predicted = self.active_prediction
             reward = 0
             
+            # အမြင့်ဆုံးရောက်ခဲ့သော Martingale Step ကို မှတ်သားရန်
+            current_level_num = self.current_step + 1
+            if current_level_num > self.max_martingale_step_reached:
+                self.max_martingale_step_reached = current_level_num
+
             if current_result.lower() == predicted.lower():
                 reward = 4.0 if self.current_step == 0 else 3.0
-                self.current_step = 0  # 🏆 နိုင်မှသာ Step 1 (0 index) သို့ ပြန်ဆင်းမည်
+                self.total_wins += 1
+                
+                # Step အလိုက် နိုင်သောပွဲရေကို မှတ်တမ်းတင်ခြင်း
+                step_key = f"Step {current_level_num} ({self.get_current_multiplier()}x)"
+                self.wins_per_step[step_key] = self.wins_per_step.get(step_key, 0) + 1
+
+                self.current_step = 0  # နိုင်မှ Step 1 သို့ ပြန်ဆင်းမည်
                 self.send_telegram(f"✅ <b>ENSEMBLE WIN! Period: {short_period}</b>")
             else:
                 reward = -3.5 - (self.current_step * 0.5)
-                self.current_step += 1  # ❌ ရှုံးလျှင် အဆုံးမရှိ ဆက်တက်မည်
+                self.total_losses += 1
+                self.current_step += 1  # ရှုံးလျှင် Step ဆက်တက်မည်
                 self.send_telegram(f"❌ <b>ENSEMBLE LOSS! Period: {short_period}</b>")
             
             self.update_q_table(self.last_state, predicted, reward)
@@ -161,49 +174,44 @@ class DualAgentEnsemble:
 
         self.window.append(current_result)
         
-        if len(self.window) < 7:
+        if len(self.window) < 5:
             return
 
         recent_list = list(self.window)
         state_key = self.get_state_key()
 
-        trend_pred, trend_desc = self.agent_trend_momentum(recent_list)
-        revert_pred, revert_desc = self.agent_mean_reversion(recent_list, state_key)
-
         final_prediction = None
         market_regime = ""
 
-        if self.current_step >= 3:
-            if trend_pred and trend_pred == revert_pred:
-                final_prediction = trend_pred
-                market_regime = f"Strict Strategy Safe Guard ({trend_desc})"
-            else:
-                final_prediction = None
-                market_regime = "High Step Strategy Caution (Waiting)"
+        vel_pred, vel_desc = self.check_momentum_velocity(recent_list)
+        if vel_pred and self.current_step < 3:
+            final_prediction = vel_pred
+            market_regime = f"Momentum Velocity ({vel_desc})"
         else:
-            if trend_pred and trend_pred == revert_pred:
-                final_prediction = trend_pred
-                market_regime = f"Strong Strategy Consensus ({trend_desc})"
-            elif trend_pred and not revert_pred:
-                final_prediction = trend_pred
-                market_regime = f"Momentum Dominant ({trend_desc})"
-            elif not trend_pred and revert_pred:
-                final_prediction = revert_pred
-                market_regime = f"Reversion Play ({revert_desc})"
+            p_mom = self.get_momentum_score(recent_list)
+            p_rev = self.get_reversion_score(recent_list, state_key)
+            combined_score = (p_mom * 0.60) + (p_rev * 0.40)
+            threshold = 0.58 if self.current_step >= 3 else 0.53
+
+            if combined_score >= threshold:
+                final_prediction = "Big"
+                market_regime = f"Soft Voting Consensus ({combined_score*100:.0f}% Big Confidence)"
+            elif combined_score <= (1.0 - threshold):
+                final_prediction = "Small"
+                market_regime = f"Soft Voting Consensus ({(1.0-combined_score)*100:.0f}% Small Confidence)"
             else:
                 final_prediction = None
-                market_regime = "Strategy Conflict (Waiting)"
+                market_regime = f"Neutral Score ({combined_score*100:.0f}%) - Balancing"
 
         if final_prediction:
             self.last_state = state_key
             self.active_prediction = final_prediction
+            self.total_signals += 1  # Signal ပေးသည့်ပွဲရေ တိုးမည်
             current_multiplier = self.get_current_multiplier()
             
             msg = (
                 f"👑 <b>PRO STRATEGY ENSEMBLE | Period: {short_period}</b>\n\n"
                 f"📊 Market Regime: <b>{market_regime}</b>\n"
-                f"🤖 Agent 1 (Momentum): <b>{trend_pred if trend_pred else 'Standby'}</b>\n"
-                f"🤖 Agent 2 (Reversion): <b>{revert_pred if revert_pred else 'Standby'}</b>\n\n"
                 f"🎯 <b>အတည်ပြု Signal:</b> <b>{final_prediction.upper()}</b>\n"
                 f"💰 <b>Martingale Flow:</b> Step {self.current_step + 1} ({current_multiplier}x)"
             )
@@ -212,19 +220,77 @@ class DualAgentEnsemble:
             wait_msg = (
                 f"⏳ <b>STRATEGY WAITING | Period: {short_period}</b>\n\n"
                 f"📊 Status: <b>{market_regime}</b>\n"
-                f"💬 <i>ပရိုဖက်ရှင်နယ် Strategy များ ချိန်ကိုက်နေဆဲဖြစ်ပါသည်...</i>"
+                f"💬 <i>အမှတ်ချိန်ကိုက်နေဆဲဖြစ်ပါသည်...</i>"
             )
             self.send_telegram(wait_msg)
 
+# 🛠️ Telegram Commands များကို စောင့်ကြည့်ပြီး တုံ့ပြန်မည့် Thread
+def poll_telegram_commands(agent):
+    offset = 0
+    while True:
+        try:
+            url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates?offset={offset}&timeout=30"
+            res = requests.get(url, timeout=35)
+            if res.status_code == 200:
+                data = res.json()
+                for update in data.get("result", []):
+                    offset = update["update_id"] + 1
+                    message = update.get("message", {})
+                    text = message.get("text", "").strip().lower()
+                    chat_id = str(message.get("chat", {}).get("id", ""))
+                    
+                    if chat_id == CHAT_ID:
+                        if text == "/status":
+                            # Win Rate တွက်ချက်ခြင်း
+            total_resolved = agent.total_wins + agent.total_losses
+                            win_rate = (agent.total_wins / total_resolved * 100) if total_resolved > 0 else 0.0
+                            
+                            # Step အလိုက် နိုင်သောပွဲများကို စာရင်းပြုစုခြင်း
+                            step_breakdown = ""
+                            if agent.wins_per_step:
+                                for s_name, s_count in sorted(agent.wins_per_step.items()):
+                                    step_breakdown += f"  • {s_name}: <b>{s_count} ပွဲ နိုင်</b>\n"
+                            else:
+                                step_breakdown = "  • မရှိသေးပါ\n"
+
+                            status_msg = (
+                                f"📊 <b>ADVANCED BOT PERFORMANCE REPORT</b>\n\n"
+                                f"⚙️ State: <b>{'PAUSED 🛑' if agent.is_paused else 'RUNNING 🟢'}</b>\n"
+                                f"🎯 Total Signals Issued: <b>{agent.total_signals}</b>\n"
+                                f"✅ Total Wins: <b>{agent.total_wins}</b> | ❌ Total Losses: <b>{agent.total_losses}</b>\n"
+                                f"📈 <b>Win Rate: {win_rate:.2f}%</b>\n\n"
+                                f"🚀 <b>Martingale Statistics:</b>\n"
+                                f"  • အမြင့်ဆုံးရောက်ခဲ့သော Level: <b>Step {agent.max_martingale_step_reached} ({2**(agent.max_martingale_step_reached-1) if agent.max_martingale_step_reached > 0 else 1}x)</b>\n"
+                                f"  • လက်ရှိ Martingale Flow: <b>Step {agent.current_step + 1} ({agent.get_current_multiplier()}x)</b>\n\n"
+                                f"🏆 <b>Step တစ်ခုချင်းစီအလိုက် နိုင်ခဲ့သည့်ပွဲများ:</b>\n"
+                                f"{step_breakdown}\n"
+                                f"📋 Window History: <code>{list(agent.window)}</code>"
+                            )
+                            agent.send_telegram(status_msg)
+                        elif text == "/pause":
+                            agent.is_paused = True
+                            agent.send_telegram("🛑 <b>Bot ကို ခဏရပ်နားလိုက်ပါပြီ (/pause)။</b>")
+                        elif text == "/resume":
+                            agent.is_paused = False
+                            agent.send_telegram("🟢 <b>Bot ကို ပြန်လည်စတင်လိုက်ပါပြီ (/resume)။</b>")
+        except Exception as e:
+            pass
+        time.sleep(2)
+
 def run_bot():
     agent = DualAgentEnsemble()
+    
+    cmd_thread = threading.Thread(target=poll_telegram_commands, args=(agent,))
+    cmd_thread.daemon = True
+    cmd_thread.start()
+
     last_period = ""
-    print("👑 Pro Strategy Dual-Agent Bot စတင် အလုပ်လုပ်နေပါပြီ...")
+    print("👑 Pro Strategy Dual-Agent Bot (Stats Tracker) စတင် အလုပ်လုပ်နေပါပြီ...")
     
     url = "https://6lotteryapi.com/api/webapi/GetNoaverageEmerdList"
     headers = {
         "accept": "application/json, text/plain, */*",
-        "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOiIxNzg3OTgxNTA5IiwibmJmIjoiMTc4Nzk4MTUwOSIsImV4cCI6IjE3ODc5ODMzMDkiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL2V4cGlyYXRpb24iOiI4LzI5LzIwMjYgMTI6MzE6NDkgUE0iLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBY2Nlc3NfVG9rZW4iLCJVc2VySWQiOiIxMDEyMjEzIiwiVXNlck5hbWUiOiI5NTk3NDA5MzkzNzAiLCJVc2VyUGhvdG8iOiI5IiwiTmlja05hbWUiOiJUaetsR3lpIiwiQW1vdW50IjoiODcuMzAiLCJJbnRlZ3JhbCI6IjAiLCJMb2dpbk1hcmsiOiJINSIsIkxvZ2luVGltZSI6IjgvMjkvMjAyNiAxMjowMTo0OSBQTSIsIjxvZ2luSVBBZGRyZXNzIjoiNDUuNDEuMTA0LjI0MCIsImRiTnVtYmVyIjoiMCIsIklzdmFsaWRhdG9yIjoiMCIsIktleUNvZGUiOiIzMjMzMiIsIlRva2VuVHlwZSI6IkFjY2Vzc19Ub2tlbiIsIjBob25lVHlwZSI6IjAiLCJVc2VyVHlwZSI6IjAiLCJVc2VyTmFtZTIiOiIuIiwiaXNzIjoiand0SXNzdWVyIiwiYXVkIjoibG90dGVyeVRpY2tldCJ9.ZL0Y9gexUTCsKwWeZhCLAAw8AABEYJt0GnIzIviMG4g",
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOiIxNzg3OTgxNTA5IiwibmJmIjoiMTc4Nzk4MTUwOSIsImV4cCI6IjE3ODc5ODMzMDkiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL2V4cGlyYXRpb24iOiI4LzI5LzIwMjYgMTI6MzE6NDkgUE0iLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBY2Nlc3NfVG9rZW4iLCJVc2VySWQiOiIxMDEyMjEzIiwiVXNlck5hbWUiOiI5NTk3NDA5MzkzNzAiLCJVc2VyUGhvdG8iOiI5IiwiTmlja05hbWUiOiJUaetsR3lpIiwiQW1vdW50IjoiODcuMzAiLCJJbnRlZ3JhbCI6IjAiLCJMb2dpbk1hcmsiOiJINSIsIkxvZ2luVGltZSI6IjgvMjkvMjAyNiAxMjowMTo0OSBQTSIsIjxvZ2luSVBBZGRyZXNzIjoiNDUuNDEuMTA0LjI0MCIsImRiTnVtYmVyIjoiMCIsIklzdmFsaWRhdG9yIjoiMCIsIktleUNvZGUiOiIzMjMzMiIsIlRva2VuVHlwZSI6IjJBY2Nlc3NfVG9rZW4iLCJob25lVHlwZSI6IjAiLCJVc2VyVHlwZSI6IjAiLCJVc2VyTmFtZTIiOiIuIiwiaXNzIjoiand0SXNzdWVyIiwiYXVkIjoibG90dGVyeVRpY2tldCJ9.ZL0Y9gexUTCsKwWeZhCLAAw8AABEYJt0GnIzIviMG4g",
         "content-type": "application/json;charset=UTF-8",
         "origin": "https://6win598.com",
         "referer": "https://6win598.com/",
@@ -239,7 +305,6 @@ def run_bot():
     
     while True:
         try:
-            # 🛠️ ပြင်ဆင်ပြီးသောလိုင်း (json=payload ဟု အမှန်ထည့်ထားသည်)
             response = requests.post(url, headers=headers, json=payload, timeout=3)
             data = response.json()
             list_data = data.get("data", {}).get("list", [])
