@@ -20,7 +20,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Pro Trading Strategy Dual-Agent AI Bot (Advanced Stats Tracker) Running 24/7!"
+    return "Pro Trading Strategy Dual-Agent AI Bot (Stats & Commands) Running 24/7!"
 
 class DualAgentEnsemble:
     def __init__(self):
@@ -34,8 +34,8 @@ class DualAgentEnsemble:
         self.total_signals = 0
         self.total_wins = 0
         self.total_losses = 0
-        self.max_martingale_step_reached = 0  # အမြင့်ဆုံးရောက်ခဲ့သော Martingale Step
-        self.wins_per_step = {}               # ဥပမာ- {1: 10, 2: 3, 3: 1} (Step အလိုက် နိုင်သောပွဲရေ)
+        self.max_martingale_step_reached = 0  
+        self.wins_per_step = {}               
 
         self.lr = 0.35
         self.q_table = self.load_q_table()
@@ -148,7 +148,6 @@ class DualAgentEnsemble:
             predicted = self.active_prediction
             reward = 0
             
-            # အမြင့်ဆုံးရောက်ခဲ့သော Martingale Step ကို မှတ်သားရန်
             current_level_num = self.current_step + 1
             if current_level_num > self.max_martingale_step_reached:
                 self.max_martingale_step_reached = current_level_num
@@ -157,16 +156,15 @@ class DualAgentEnsemble:
                 reward = 4.0 if self.current_step == 0 else 3.0
                 self.total_wins += 1
                 
-                # Step အလိုက် နိုင်သောပွဲရေကို မှတ်တမ်းတင်ခြင်း
                 step_key = f"Step {current_level_num} ({self.get_current_multiplier()}x)"
                 self.wins_per_step[step_key] = self.wins_per_step.get(step_key, 0) + 1
 
-                self.current_step = 0  # နိုင်မှ Step 1 သို့ ပြန်ဆင်းမည်
+                self.current_step = 0  
                 self.send_telegram(f"✅ <b>ENSEMBLE WIN! Period: {short_period}</b>")
             else:
                 reward = -3.5 - (self.current_step * 0.5)
                 self.total_losses += 1
-                self.current_step += 1  # ရှုံးလျှင် Step ဆက်တက်မည်
+                self.current_step += 1  
                 self.send_telegram(f"❌ <b>ENSEMBLE LOSS! Period: {short_period}</b>")
             
             self.update_q_table(self.last_state, predicted, reward)
@@ -206,7 +204,7 @@ class DualAgentEnsemble:
         if final_prediction:
             self.last_state = state_key
             self.active_prediction = final_prediction
-            self.total_signals += 1  # Signal ပေးသည့်ပွဲရေ တိုးမည်
+            self.total_signals += 1  
             current_multiplier = self.get_current_multiplier()
             
             msg = (
@@ -224,7 +222,6 @@ class DualAgentEnsemble:
             )
             self.send_telegram(wait_msg)
 
-# 🛠️ Telegram Commands များကို စောင့်ကြည့်ပြီး တုံ့ပြန်မည့် Thread
 def poll_telegram_commands(agent):
     offset = 0
     while True:
@@ -241,11 +238,9 @@ def poll_telegram_commands(agent):
                     
                     if chat_id == CHAT_ID:
                         if text == "/status":
-                            # Win Rate တွက်ချက်ခြင်း
-            total_resolved = agent.total_wins + agent.total_losses
+                            total_resolved = agent.total_wins + agent.total_losses
                             win_rate = (agent.total_wins / total_resolved * 100) if total_resolved > 0 else 0.0
                             
-                            # Step အလိုက် နိုင်သောပွဲများကို စာရင်းပြုစုခြင်း
                             step_breakdown = ""
                             if agent.wins_per_step:
                                 for s_name, s_count in sorted(agent.wins_per_step.items()):
