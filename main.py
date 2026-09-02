@@ -29,7 +29,7 @@ def home():
     win_rate = (global_agent.total_wins / total_resolved * 100) if total_resolved > 0 else 0.0
     
     return f"""
-    <h2>📊 6-AGENT TRADING BOT REPORT (RESPONSE INSPECT MODE)</h2>
+    <h2>📊 6-AGENT TRADING BOT REPORT (10-DIGIT TIMESTAMP FIXED)</h2>
     <p><b>Status:</b> {'PAUSED 🛑' if global_agent.is_paused else 'RUNNING 🟢'}</p>
     <p><b>Active Chat ID:</b> {CHAT_ID}</p>
     <p><b>Total Signals:</b> {global_agent.total_signals}</p>
@@ -258,7 +258,7 @@ def poll_telegram_commands(agent):
         time.sleep(1)
 
 def run_bot():
-    print("🤖 Background Wingo Bot Thread Started (Inspect Mode)...", flush=True)
+    print("🤖 Background Wingo Bot Thread Started (10-Digit Timestamp Fixed)...", flush=True)
     agent = MultiAgentEnsemble()
     
     threading.Thread(target=poll_telegram_commands, args=(agent,), daemon=True).start()
@@ -278,6 +278,7 @@ def run_bot():
     
     while True:
         try:
+            # 🕒 10-digit timestamp (စက္ကန့်တိတိအတွက် int(time.time())) ကိုသာ အသုံးပြုခြင်း
             payload = {
                 "pageSize": 10, 
                 "pageNo": 1, 
@@ -285,15 +286,12 @@ def run_bot():
                 "language": 7,
                 "random": "036263f367384d418be07465793c8da8",
                 "signature": "55F4FD150F15F090B943374F3C9BE78B",
-                "timestamp": int(time.time() * 1000)
+                "timestamp": int(time.time())
             }
             
             response = requests.post(url, headers=headers, json=payload, timeout=5)
             if response.status_code == 200:
                 data = response.json()
-                # 🔍 API က ဘာတွေပေးနေလဲ သိရအောင် ပုံစံထုတ်ပြပါမည်
-                print(f"API Response Data Sample: {str(data)[:150]}", flush=True)
-                
                 list_data = data.get("data", {}).get("list", [])
                 if len(list_data) > 0:
                     latest_round = list_data[0]
