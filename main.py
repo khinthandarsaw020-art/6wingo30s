@@ -4,7 +4,6 @@ import json
 import os
 import threading
 from collections import deque
-from flask import Flask
 
 # ==========================================
 # Telegram နဲ့ Supabase အချက်အလက်များ
@@ -15,12 +14,6 @@ CHAT_ID = "-1003917249143"
 SUPABASE_URL = "https://msgzacekhrvlqkqgjvly.supabase.co"
 SUPABASE_KEY = "sb_publishable_bVJj1lqSAsIQ1kQ8Ae2vAQ_o3yCjDeA"
 # ==========================================
-
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return "6-Agent Consensus Trading Bot Running 24/7!"
 
 class MultiAgentEnsemble:
     def __init__(self):
@@ -78,7 +71,7 @@ class MultiAgentEnsemble:
         payload = {"chat_id": CHAT_ID, "text": message, "parse_mode": "HTML"}
         try:
             res = requests.post(url, json=payload, timeout=5)
-            print(f"Telegram response: {res.status_code}")
+            print(f"Telegram sent status: {res.status_code}")
         except Exception as e:
             print(f"Telegram Error: {e}")
 
@@ -225,7 +218,6 @@ class MultiAgentEnsemble:
             self.send_telegram(msg)
 
 def poll_telegram_commands(agent):
-    # Webhook ကို ရှင်းလင်းပြီး getUpdates ကို သေချာစတင်ရန်
     try:
         requests.get(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/deleteWebhook?drop_pending_updates=true", timeout=10)
         print("Telegram Webhook cleared successfully.")
@@ -244,8 +236,6 @@ def poll_telegram_commands(agent):
                     message = update.get("message", {})
                     text = message.get("text", "").strip().lower()
                     chat_id = str(message.get("chat", {}).get("id", ""))
-                    
-                    print(f"Received telegram message: '{text}' from chat_id: {chat_id}")
                     
                     if chat_id == CHAT_ID:
                         if text == "/status":
@@ -279,23 +269,24 @@ def poll_telegram_commands(agent):
                             agent.is_paused = False
                             agent.send_telegram("🟢 <b>Bot ကို ပြန်လည်စတင်လိုက်ပါပြီ (/resume)။</b>")
         except Exception as e:
-            print(f"Polling error: {e}")
+            pass
         time.sleep(1)
 
-def run_bot():
+def main():
     agent = MultiAgentEnsemble()
     
+    # Telegram Command Listener Thread
     cmd_thread = threading.Thread(target=poll_telegram_commands, args=(agent,))
     cmd_thread.daemon = True
     cmd_thread.start()
 
     last_period = ""
-    print("🤖 6-Agent Committee Bot စတင် အလုပ်လုပ်နေပါပြီ...")
+    print("🤖 Pure 6-Agent Wingo Bot စတင် အလုပ်လုပ်နေပါပြီ...")
     
     url = "https://6lotteryapi.com/api/webapi/GetNoaverageEmerdList"
     headers = {
         "accept": "application/json, text/plain, */*",
-        "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOiIxNzg3OTgxNTA5IiwibmJmIjoiMTc4Nzk4MTUwOSIsImV4cCI6IjE3ODc5ODMzMDkiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL2V4cGlyYXRpb24iOiI4LzI5LzIwMjYgMTI6MzE2NDkgUE0iLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBY2Nlc3NfVG9rZW4iLCJVc2VySWQiOiIxMDEyMjEzIiwiVXNlck5hbWUiOiI5NTk3NDA5MzkzNzAiLCJVc2VyUGhvdG8iOiI5IiwiTmlja05hbWUiOiJUaetsR3lpIiwiQW1vdW50IjoiODcuMzAiLCJJbnRlZ3JhbCI6IjAiLCJMb2dpbk1hcmsiOiJINSIsIkxvZ2luVGltZSI6IjgvMjkvMjAyNiAxMjowMTo0OSBQTSIsIjxvZ2luSVBBZGRyZXNzIjoiNDUuNDEuMTA0LjI0MCIsImRiTnVtYmVyIjoiMCIsIklzdmFsaWRhdG9yIjoiMCIsIktleUNvZGUiOiIzMjMzMiIsImRva2VuVHlwZSI6IjJBY2Nlc3NfVG9rZW4iLCJob25lVHlpZSI6IjAiLCJVc2VyVHlpZSI6IjAiLCJVc2VyTmFtZTIiOiIuIiwiaXNzIjoiand0SXNzdWVyIiwiYXVkIjoibG90dGVyeVRpY2tldCJ9.ZL0Y9gexUTCsKwWeZhCLAAw8AABEYJt0GnIzIviMG4g",
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOiIxNzg3OTgxNTA5IiwibmJmIjoiMTc4Nzk4MTUwOSIsImV4cCI6IjE3ODc5ODMzMDkiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL2V4cGlyYXRpb24iOiI4LzI5LzIwMjYgMTI6MzE2NDkgUE0iLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBY2Nlc3NfVG9rZW4iLCJVc2VySWQiOiIxMDEyMjEzIiwiVXNlck5hbWUiOiI5NTk3NDA5MzkzNzAiLCJVc2VyUGhvdG8iOiI5IiwiTmlja05hbWUiOiJUaetsR3lpIiwiQW1vdW50IjoiODcuMzAiLCJJbnRlZ3JhbCI6IjAiLCJMb2dpbk1hcmsiOiJINSIsIkxvZ2luVGltZSI6IjgvMjkvMjAyNiAxMjowMTo0OSBQTSIsIjxvZ2luSVBBZGRyZXNzIjoiNDUuNDEuMTA0LjI0MCIsImRiTnVtYmVyIjoiMCIsIklzdmFsaWRhdG9yIjoiMCIsIktleUNvZGUiOiIzMjMzMiIsImRva2VuVHlwZSI6IjJBY2Nlc3NfVG9rZW4iLCJob25lVHlpZSI6IjAiLCJVc2VyVHlwZSI6IjAiLCJVc2VyTmFtZTIiOiIuIiwiaXNzIjoiand0SXNzdWVyIiwiYXVkIjoibG90dGVyeVRpY2tldCJ9.ZL0Y9gexUTCsKwWeZhCLAAw8AABEYJt0GnIzIviMG4g",
         "content-type": "application/json;charset=UTF-8",
         "origin": "https://6win598.com",
         "referer": "https://6win598.com/",
@@ -314,8 +305,6 @@ def run_bot():
             data = response.json()
             list_data = data.get("data", {}).get("list", [])
             if len(list_data) > 0:
-                latest_round = list_data.get("list",)[0] if isinstance(list_data, list) else list_data[0]
-                # Safe parsing
                 latest_round = list_data[0]
                 raw_period = str(latest_round.get("issueNumber"))
                 current_period = str(int(raw_period) + 2)
@@ -329,11 +318,5 @@ def run_bot():
             pass
         time.sleep(0.5)
 
-# Flask မတိုင်မီ Background Thread ကို ကြိုတင်စတင်ခြင်း
-bot_thread = threading.Thread(target=run_bot)
-bot_thread.daemon = True
-bot_thread.start()
-
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+    main()
