@@ -3,6 +3,7 @@ import time
 import json
 import os
 import threading
+import hashlib
 from collections import deque
 from flask import Flask
 
@@ -29,7 +30,7 @@ def home():
     win_rate = (global_agent.total_wins / total_resolved * 100) if total_resolved > 0 else 0.0
     
     return f"""
-    <h2>📊 6-AGENT TRADING BOT REPORT (FIXED API)</h2>
+    <h2>📊 6-AGENT TRADING BOT REPORT (ORIGINAL API RESTORED)</h2>
     <p><b>Status:</b> {'PAUSED 🛑' if global_agent.is_paused else 'RUNNING 🟢'}</p>
     <p><b>Active Chat ID:</b> {CHAT_ID}</p>
     <p><b>Total Signals:</b> {global_agent.total_signals}</p>
@@ -199,7 +200,7 @@ class MultiAgentEnsemble:
 
         self.window.append(current_result)
         if len(self.window) < 10:
-            self.send_telegram(f"⏳ <b>Collecting Multi-Timeframe Data... Period: {short_period}</b> ({len(self.window)}/10)")
+            self.send_telegram(f"⏳ <b>Collecting Data... Period: {short_period}</b> ({len(self.window)}/10)")
             return
 
         state_key = self.get_state_key()
@@ -258,27 +259,40 @@ def poll_telegram_commands(agent):
         time.sleep(1)
 
 def run_bot():
-    print("🤖 Background Wingo Bot Thread Started (Fixed API Endpoint)...")
+    print("🤖 Background Wingo Bot Thread Started (Original API Restored)...")
     agent = MultiAgentEnsemble()
     
     threading.Thread(target=poll_telegram_commands, args=(agent,), daemon=True).start()
 
     last_period = ""
-    # 🔄 ပိုမိုလွယ်ကူပြီး တိုက်ရိုက်ချိတ်ဆက်မည့် အစားထိုး API Endpoint
-    url = "https://api.bdgwin.com/api/webapi/GetNoaverageEmerdList"
+    # 🔒 မူရင်း သုံးနေကျ API Endpoint ကိုသာ ဆက်လက်သုံးပါမည်
+    url = "https://6lotteryapi.com/api/webapi/GetNoaverageEmerdList"
+    
+    # 🔑 မူရင်း User Token (Account မလစ်စေရန် မူရင်းအတိုင်း ထည့်ထားသည်)
+    auth_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOiIxNzg3OTgxNTA5IiwibmJmIjoiMTc4Nzk4MTUwOSIsImV4cCI6IjE3ODc5ODMzMDkiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL2V4cGlyYXRpb24iOiI4LzI5LzIwMjYgMTI6MzE2NDkgUE0iLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBY2Nlc3NfVG9rZW4iLCJVc2VySWQiOiIxMDEyMjEzIiwiVXNlck5hbWUiOiI5NTk3NDA5MzkzNzAiLCJVc2VyUGhvdG8iOiI5IiwiTmlja05hbWUiOiJUaetsR3lpIiwiQW1vdW50IjoiODcuMzAiLCJJbnRlZ3JhbCI6IjAiLCJMb2dpbk1hcmsiOiJINSIsIkxvZ2luVGltZSI6IjgvMjkvMjAyNiAxMjowMTo0OSBQTSIsIjxvZ2luSVBBZGRyZXNzIjoiNDUuNDEuMTA0LjI0MCIsImRiTnVtYmVyIjoiMCIsIklzdmFsaWRhdG9yIjoiMCIsIktleUNvZGUiOiIzMjMzMiIsImRva2VuVHypZSI6IjJBY2Nlc3NfVG9rZW4iLCJob25lVHlpZSI6IjAiLCJVc2VyVHlpZSI6IjAiLCJVc2VyTmFtZ2UiOiIuIiwiaXNzIjoiand0SXNzdWVyIiwiYXVkIjoibG90dGVyeVRpY2tldCJ9.ZL0Y9gexUTCsKwWeZhCLAAw8AABEYJt0GnIzIviMG4g"
+
     headers = {
-        "Content-Type": "application/json;charset=UTF-8",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-    }
-    payload = {
-        "pageSize": 10,
-        "pageNo": 1,
-        "typeId": 30,
-        "language": 0
+        "accept": "application/json, text/plain, */*",
+        "authorization": f"Bearer {auth_token}",
+        "content-type": "application/json;charset=UTF-8",
+        "origin": "https://6win598.com",
+        "referer": "https://6win598.com/",
+        "user-agent": "Mozilla/5.0"
     }
     
     while True:
         try:
+            current_ts = int(time.time() * 1000)
+            payload = {
+                "pageSize": 10, 
+                "pageNo": 1, 
+                "typeId": 30, 
+                "language": 7,
+                "random": "036263f367384d418be07465793c8da8",
+                "signature": "55F4FD150F15F090B943374F3C9BE78B",
+                "timestamp": current_ts
+            }
+            
             response = requests.post(url, headers=headers, json=payload, timeout=5)
             if response.status_code == 200:
                 data = response.json()
@@ -292,13 +306,13 @@ def run_bot():
                     
                     if current_period != last_period:
                         last_period = current_period
-                        print(f"Successfully Fetched Round: {current_period} -> Result: {current_result}")
+                        print(f"Original API Success - Round: {current_period} -> {current_result}")
                         agent.analyze_round(current_period, current_result)
             else:
-                print(f"API Response Code: {response.status_code}")
+                print(f"API Error: {response.status_code} - {response.text}")
         except Exception as e:
-            print(f"API Fetch Error: {e}")
-        time.sleep(2)
+            print(f"API Exception: {e}")
+        time.sleep(1)
 
 threading.Thread(target=run_bot, daemon=True).start()
 
