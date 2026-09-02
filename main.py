@@ -12,7 +12,7 @@ from flask import Flask
 TELEGRAM_TOKEN = "8782457950:AAHbd-J29Y0fKhcBOHbSnn1d4z4vhiDQLKg" 
 CHAT_ID = "-1003917249143"
 
-SUPABASE_URL = "https://xdhhakpsonirkpimctlw.supabase.co"
+SUPABASE_URL = "https://msgzacekhrvlqkqgjvly.supabase.co"
 SUPABASE_KEY = "sb_publishable_bVJj1lqSAsIQ1kQ8Ae2vAQ_o3yCjDeA"
 # ==========================================
 
@@ -20,11 +20,11 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Pro Trading Strategy Dual-Agent AI Bot (Fast Polling Stats) Running 24/7!"
+    return "6-Agent Consensus Trading Bot Running 24/7!"
 
-class DualAgentEnsemble:
+class MultiAgentEnsemble:
     def __init__(self):
-        self.window = deque(maxlen=5)
+        self.window = deque(maxlen=10)
         self.current_step = 0 
         self.active_prediction = None
         self.last_state = None
@@ -55,10 +55,9 @@ class DualAgentEnsemble:
                 q_dict = {}
                 for row in data:
                     q_dict[row['state']] = row['actions']
-                print(f"📂 Supabase မှ Strategy Memory ({len(q_dict)} states) ကို ဖတ်ရှုပြီးပါပြီ။")
                 return q_dict
         except Exception as e:
-            print(f"⚠️ Supabase မှ ဖတ်ရာတွင် အမှားရှိသည်။: {e}")
+            pass
         return {}
 
     def save_q_table(self, state, actions):
@@ -68,10 +67,7 @@ class DualAgentEnsemble:
             "Content-Type": "application/json",
             "Prefer": "resolution=merge-duplicates"
         }
-        payload = {
-            "state": state,
-            "actions": actions
-        }
+        payload = {"state": state, "actions": actions}
         try:
             requests.post(f"{SUPABASE_URL}/rest/v1/q_table", headers=headers, json=payload)
         except Exception as e:
@@ -86,7 +82,7 @@ class DualAgentEnsemble:
             pass
 
     def get_state_key(self):
-        return ",".join(list(self.window))
+        return ",".join(list(self.window)[-5:])
 
     def get_q_action(self, state):
         if state not in self.q_table:
@@ -105,38 +101,87 @@ class DualAgentEnsemble:
         self.q_table[state][action] = old_q + self.lr * (reward - old_q)
         self.save_q_table(state, self.q_table[state])
 
-    def check_momentum_velocity(self, recent_list):
-        if len(recent_list) >= 3:
-            last_three = [str(x).capitalize() for x in recent_list[-3:]]
-            if last_three == ["Big", "Big", "Big"]:
-                return "Big", "Velocity Surge (Strong Streak)"
-            elif last_three == ["Small", "Small", "Small"]:
-                return "Small", "Velocity Surge (Strong Streak)"
-        return None, None
+    # ==========================================
+    # 🤖 6-Agent Committee တွက်ချက်မှုများ
+    # ==========================================
+    def agent_1_momentum(self, lst):
+        # Trend Follower
+        if len(lst) >= 3 and lst[-1] == lst[-2] == lst[-3]:
+            return lst[-1]
+        return None
 
-    def get_momentum_score(self, recent_list):
-        weights = [1.0, 1.4, 1.8, 2.3, 3.0]
-        score_big = 0.0
-        total_weight = sum(weights[-len(recent_list):])
-        for i, val in enumerate(recent_list):
-            w = weights[len(weights) - len(recent_list) + i]
-            if str(val).capitalize() == "Big":
-                score_big += w
-        return score_big / total_weight
+    def agent_2_reversion(self, lst):
+        # Mean Reversion (Exhaustion Check)
+        if len(lst) >= 4 and lst[-1] == lst[-2] == lst[-3] == lst[-4]:
+            return "Small" if lst[-1] == "Big" else "Big"
+        return None
 
-    def get_reversion_score(self, recent_list, state):
-        if len(recent_list) >= 4:
-            last_four = [str(x).capitalize() for x in recent_list[-4:]]
-            if last_four.count("Big") == 4:
-                return 0.15
-            elif last_four.count("Small") == 4:
-                return 0.85
-        q_act = self.get_q_action(state)
-        if q_act == "Big":
-            return 0.65
-        elif q_act == "Small":
-            return 0.35
-        return 0.50
+    def agent_3_markov(self, lst):
+        # Sequence Probability Proxy
+        if len(lst) >= 5:
+            # ဥပမာ - နောက်ဆုံး ၂ ကွက်အပေါ်မူတည်၍ ဖြစ်တန်စွမ်းခန့်မှန်းခြင်း
+            if lst[-1] == lst[-2]:
+                return "Small" if lst[-1] == "Big" else "Big"
+            return lst[-1]
+        return None
+
+    def agent_4_qlearning(self, state_key):
+        # AI Memory Agent
+        return self.get_q_action(state_key)
+
+    def agent_5_frequency(self, lst):
+        # Window Ratio Analyzer
+        big_c = lst.count("Big")
+        small_c = lst.count("Small")
+        if big_c > small_c:
+            return "Big"
+        elif small_c > big_c:
+            return "Small"
+        return None
+
+    def agent_6_streak(self, lst):
+        # Streak Alternator
+        if len(lst) >= 2:
+            if lst[-1] != lst[-2]:
+                return lst[-1]  # Alternating continuation
+        return None
+
+    def get_committee_consensus(self, recent_list, state_key):
+        votes = []
+
+        # ယူနစ်အလိုက် Agent ၆ ကောင် မဲပေးခြင်း
+        v1 = self.agent_1_momentum(recent_list)
+        if v1: votes.append(v1)
+
+        v2 = self.agent_2_reversion(recent_list)
+        if v2: votes.append(v2)
+
+        v3 = self.agent_3_markov(recent_list)
+        if v3: votes.append(v3)
+
+        v4 = self.agent_4_qlearning(state_key)
+        if v4: votes.append(v4)
+
+        v5 = self.agent_5_frequency(recent_list)
+        if v5: votes.append(v5)
+
+        v6 = self.agent_6_streak(recent_list)
+        if v6: votes.append(v6)
+
+        if not votes:
+            return None, "No Votes"
+
+        big_votes = votes.count("Big")
+        small_votes = votes.count("Small")
+        total_votes = len(votes)
+
+        # ၄ ကောင်နှင့်အထက် တူညီမှု (Consensus) ရှိမရှိ စစ်ဆေးခြင်း
+        if big_votes >= 4:
+            return "Big", f"6-Agent Consensus ({big_votes}/6 Big)"
+        elif small_votes >= 4:
+            return "Small", f"6-Agent Consensus ({small_votes}/6 Small)"
+
+        return None, f"Split Votes (Big: {big_votes}, Small: {small_votes}) - Skipped"
 
     def analyze_round(self, period, current_result):
         if self.is_paused:
@@ -160,46 +205,26 @@ class DualAgentEnsemble:
                 self.wins_per_step[step_key] = self.wins_per_step.get(step_key, 0) + 1
 
                 self.current_step = 0  
-                self.send_telegram(f"✅ <b>ENSEMBLE WIN! Period: {short_period}</b>")
+                self.send_telegram(f"✅ <b>AGENTS WIN! Period: {short_period}</b>")
             else:
                 reward = -3.5 - (self.current_step * 0.5)
                 self.total_losses += 1
                 self.current_step += 1  
-                self.send_telegram(f"❌ <b>ENSEMBLE LOSS! Period: {short_period}</b>")
+                self.send_telegram(f"❌ <b>AGENTS LOSS! Period: {short_period}</b>")
             
             self.update_q_table(self.last_state, predicted, reward)
             self.active_prediction = None
 
         self.window.append(current_result)
         
-        if len(self.window) < 5:
+        if len(self.window) < 6:
             return
 
         recent_list = list(self.window)
         state_key = self.get_state_key()
 
-        final_prediction = None
-        market_regime = ""
-
-        vel_pred, vel_desc = self.check_momentum_velocity(recent_list)
-        if vel_pred and self.current_step < 3:
-            final_prediction = vel_pred
-            market_regime = f"Momentum Velocity ({vel_desc})"
-        else:
-            p_mom = self.get_momentum_score(recent_list)
-            p_rev = self.get_reversion_score(recent_list, state_key)
-            combined_score = (p_mom * 0.60) + (p_rev * 0.40)
-            threshold = 0.58 if self.current_step >= 3 else 0.53
-
-            if combined_score >= threshold:
-                final_prediction = "Big"
-                market_regime = f"Soft Voting Consensus ({combined_score*100:.0f}% Big Confidence)"
-            elif combined_score <= (1.0 - threshold):
-                final_prediction = "Small"
-                market_regime = f"Soft Voting Consensus ({(1.0-combined_score)*100:.0f}% Small Confidence)"
-            else:
-                final_prediction = None
-                market_regime = f"Neutral Score ({combined_score*100:.0f}%) - Balancing"
+        # 6-Agent Committee ဆုံးဖြတ်ချက် ရယူခြင်း
+        final_prediction, market_regime = self.get_committee_consensus(recent_list, state_key)
 
         if final_prediction:
             self.last_state = state_key
@@ -208,31 +233,28 @@ class DualAgentEnsemble:
             current_multiplier = self.get_current_multiplier()
             
             msg = (
-                f"👑 <b>PRO STRATEGY ENSEMBLE | Period: {short_period}</b>\n\n"
-                f"📊 Market Regime: <b>{market_regime}</b>\n"
-                f"🎯 <b>အတည်ပြု Signal:</b> <b>{final_prediction.upper()}</b>\n"
-                f"💰 <b>Martingale Flow:</b> Step {self.current_step + 1} ({current_multiplier}x)"
+                f"🤖 <b>6-AGENT COMMITTEE | Period: {short_period}</b>\n\n"
+                f"🏛️ Regime: <b>{market_regime}</b>\n"
+                f"🎯 <b>Signal:</b> <b>{final_prediction.upper()}</b>\n"
+                f"💰 <b>Martingale:</b> Step {self.current_step + 1} ({current_multiplier}x)"
             )
             self.send_telegram(msg)
-        else:
-            wait_msg = (
-                f"⏳ <b>STRATEGY WAITING | Period: {short_period}</b>\n\n"
-                f"📊 Status: <b>{market_regime}</b>\n"
-                f"💬 <i>အမှတ်ချိန်ကိုက်နေဆဲဖြစ်ပါသည်...</i>"
-            )
-            self.send_telegram(wait_msg)
 
-# 🛠️ ပိုမိုမြန်ဆန် တိကျသော Telegram Command Polling (Error Handling ပါဝင်သည်)
 def poll_telegram_commands(agent):
-    last_update_id = 0
+    try:
+        requests.get(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/deleteWebhook?drop_pending_updates=true")
+    except:
+        pass
+
+    offset = 0
     while True:
         try:
-            url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates?offset={last_update_id + 1}&timeout=10"
-            res = requests.get(url, timeout=15)
+            url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates?offset={offset}&timeout=20"
+            res = requests.get(url, timeout=25)
             if res.status_code == 200:
                 data = res.json()
                 for update in data.get("result", []):
-                    last_update_id = update["update_id"]
+                    offset = update["update_id"] + 1
                     message = update.get("message", {})
                     text = message.get("text", "").strip().lower()
                     chat_id = str(message.get("chat", {}).get("id", ""))
@@ -250,17 +272,16 @@ def poll_telegram_commands(agent):
                                 step_breakdown = "  • မရှိသေးပါ\n"
 
                             status_msg = (
-                                f"📊 <b>ADVANCED BOT PERFORMANCE REPORT</b>\n\n"
+                                f"📊 <b>6-AGENT PERFORMANCE REPORT</b>\n\n"
                                 f"⚙️ State: <b>{'PAUSED 🛑' if agent.is_paused else 'RUNNING 🟢'}</b>\n"
-                                f"🎯 Total Signals Issued: <b>{agent.total_signals}</b>\n"
-                                f"✅ Total Wins: <b>{agent.total_wins}</b> | ❌ Total Losses: <b>{agent.total_losses}</b>\n"
+                                f"🎯 Total Signals: <b>{agent.total_signals}</b>\n"
+                                f"✅ Wins: <b>{agent.total_wins}</b> | ❌ Losses: <b>{agent.total_losses}</b>\n"
                                 f"📈 <b>Win Rate: {win_rate:.2f}%</b>\n\n"
-                                f"🚀 <b>Martingale Statistics:</b>\n"
-                                f"  • အမြင့်ဆုံးရောက်ခဲ့သော Level: <b>Step {agent.max_martingale_step_reached} ({2**(agent.max_martingale_step_reached-1) if agent.max_martingale_step_reached > 0 else 1}x)</b>\n"
-                                f"  • လက်ရှိ Martingale Flow: <b>Step {agent.current_step + 1} ({agent.get_current_multiplier()}x)</b>\n\n"
-                                f"🏆 <b>Step တစ်ခုချင်းစီအလိုက် နိုင်ခဲ့သည့်ပွဲများ:</b>\n"
-                                f"{step_breakdown}\n"
-                                f"📋 Window History: <code>{list(agent.window)}</code>"
+                                f"🚀 <b>Martingale Stats:</b>\n"
+                                f"  • အမြင့်ဆုံး Level: <b>Step {agent.max_martingale_step_reached} ({2**(agent.max_martingale_step_reached-1) if agent.max_martingale_step_reached > 0 else 1}x)</b>\n"
+                                f"  • လက်ရှိ Step: <b>Step {agent.current_step + 1} ({agent.get_current_multiplier()}x)</b>\n\n"
+                                f"🏆 <b>Step အလိုက် နိုင်ခဲ့သည့်ပွဲများ:</b>\n"
+                                f"{step_breakdown}"
                             )
                             agent.send_telegram(status_msg)
                         elif text == "/pause":
@@ -274,19 +295,19 @@ def poll_telegram_commands(agent):
         time.sleep(1)
 
 def run_bot():
-    agent = DualAgentEnsemble()
+    agent = MultiAgentEnsemble()
     
     cmd_thread = threading.Thread(target=poll_telegram_commands, args=(agent,))
     cmd_thread.daemon = True
     cmd_thread.start()
 
     last_period = ""
-    print("👑 Pro Strategy Dual-Agent Bot (Stats Tracker) စတင် အလုပ်လုပ်နေပါပြီ...")
+    print("🤖 6-Agent Committee Bot စတင် အလုပ်လုပ်နေပါပြီ...")
     
     url = "https://6lotteryapi.com/api/webapi/GetNoaverageEmerdList"
     headers = {
         "accept": "application/json, text/plain, */*",
-        "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOiIxNzg3OTgxNTA5IiwibmJmIjoiMTc4Nzk4MTUwOSIsImV4cCI6IjE3ODc5ODMzMDkiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL2V4cGlyYXRpb24iOiI4LzI5LzIwMjYgMTI6MzE6NDkgUE0iLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL2JvbGUiOiJBY2Nlc3NfVG9rZW4iLCJVc2VySWQiOiIxMDEyMjEzIiwiVXNlck5hbWUiOiI5NTk3NDA5MzkzNzAiLCJVc2VyUGhvdG8iOiI5IiwiTmlja05hbWUiOiJUaetsR3lpIiwiQW1vdW50IjoiODcuMzAiLCJJbnRlZ3JhbCI6IjAiLCJMb2dpbk1hcmsiOiJINSIsIkxvZ2luVGltZSI6IjgvMjkvMjAyNiAxMjowMTo0OSBQTSIsIjxvZ2luSVBBZGRyZXNzIjoiNDUuNDEuMTA0LjI0MCIsImRiTnVtYmVyIjoiMCIsIklzdmFsaWRhdG9yIjoiMCIsIktleUNvZGUiOiIzMjMzMiIsIlRva2VuVHlwZSI6IjJBY2Nlc3NfVG9rZW4iLCJob25lVHlpZSI6IjAiLCJVc2VyVHlwZSI6IjAiLCJVc2VyTmFtZTIiOiIuIiwiaXNzIjoiand0SXNzdWVyIiwiYXVkIjoibG90dGVyeVRpY2tldCJ9.ZL0Y9gexUTCsKwWeZhCLAAw8AABEYJt0GnIzIviMG4g",
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOiIxNzg3OTgxNTA5IiwibmJmIjoiMTc4Nzk4MTUwOSIsImV4cCI6IjE3ODc5ODMzMDkiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL2V4cGlyYXRpb24iOiI4LzI5LzIwMjYgMTI6MzE2NDkgUE0iLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBY2Nlc3NfVG9rZW4iLCJVc2VySWQiOiIxMDEyMjEzIiwiVXNlck5hbWUiOiI5NTk3NDA5MzkzNzAiLCJVc2VyUGhvdG8iOiI5IiwiTmlja05hbWUiOiJUaetsR3lpIiwiQW1vdW50IjoiODcuMzAiLCJJbnRlZ3JhbCI6IjAiLCJMb2dpbk1hcmsiOiJINSIsIkxvZ2luVGltZSI6IjgvMjkvMjAyNiAxMjowMTo0OSBQTSIsIjxvZ2luSVBBZGRyZXNzIjoiNDUuNDEuMTA0LjI0MCIsImRiTnVtYmVyIjoiMCIsIklzdmFsaWRhdG9yIjoiMCIsIktleUNvZGUiOiIzMjMzMiIsImRva2VuVHlwZSI6IjJBY2Nlc3NfVG9rZW4iLCJob25lVHlpZSI6IjAiLCJVc2VyVHlwZSI6IjAiLCJVc2VyTmFtZTIiOiIuIiwiaXNzIjoiand0SXNzdWVyIiwiYXVkIjoibG90dGVyeVRpY2tldCJ9.ZL0Y9gexUTCsKwWeZhCLAAw8AABEYJt0GnIzIviMG4g",
         "content-type": "application/json;charset=UTF-8",
         "origin": "https://6win598.com",
         "referer": "https://6win598.com/",
