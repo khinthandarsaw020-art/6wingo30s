@@ -49,7 +49,7 @@ class MultiAgentEnsemble:
             "Authorization": f"Bearer {SUPABASE_KEY}"
         }
         try:
-            res = requests.get(f"{SUPABASE_URL}/rest/v1/q_table?select=*", headers=headers)
+            res = requests.get(f"{SUPABASE_URL}/rest/v1/q_table?select=*", headers=headers, timeout=5)
             if res.status_code == 200:
                 data = res.json()
                 q_dict = {}
@@ -57,7 +57,7 @@ class MultiAgentEnsemble:
                     q_dict[row['state']] = row['actions']
                 return q_dict
         except Exception as e:
-            pass
+            print(f"Error loading Q-Table: {e}")
         return {}
 
     def save_q_table(self, state, actions):
@@ -69,17 +69,18 @@ class MultiAgentEnsemble:
         }
         payload = {"state": state, "actions": actions}
         try:
-            requests.post(f"{SUPABASE_URL}/rest/v1/q_table", headers=headers, json=payload)
+            requests.post(f"{SUPABASE_URL}/rest/v1/q_table", headers=headers, json=payload, timeout=5)
         except Exception as e:
-            pass
+            print(f"Error saving Q-Table: {e}")
 
     def send_telegram(self, message):
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
         payload = {"chat_id": CHAT_ID, "text": message, "parse_mode": "HTML"}
         try:
-            requests.post(url, json=payload)
+            res = requests.post(url, json=payload, timeout=5)
+            print(f"Telegram response: {res.status_code}")
         except Exception as e:
-            pass
+            print(f"Telegram Error: {e}")
 
     def get_state_key(self):
         return ",".join(list(self.window)[-5:])
@@ -105,32 +106,26 @@ class MultiAgentEnsemble:
     # 🤖 6-Agent Committee တွက်ချက်မှုများ
     # ==========================================
     def agent_1_momentum(self, lst):
-        # Trend Follower
         if len(lst) >= 3 and lst[-1] == lst[-2] == lst[-3]:
             return lst[-1]
         return None
 
     def agent_2_reversion(self, lst):
-        # Mean Reversion (Exhaustion Check)
         if len(lst) >= 4 and lst[-1] == lst[-2] == lst[-3] == lst[-4]:
             return "Small" if lst[-1] == "Big" else "Big"
         return None
 
     def agent_3_markov(self, lst):
-        # Sequence Probability Proxy
         if len(lst) >= 5:
-            # ဥပမာ - နောက်ဆုံး ၂ ကွက်အပေါ်မူတည်၍ ဖြစ်တန်စွမ်းခန့်မှန်းခြင်း
             if lst[-1] == lst[-2]:
                 return "Small" if lst[-1] == "Big" else "Big"
             return lst[-1]
         return None
 
     def agent_4_qlearning(self, state_key):
-        # AI Memory Agent
         return self.get_q_action(state_key)
 
     def agent_5_frequency(self, lst):
-        # Window Ratio Analyzer
         big_c = lst.count("Big")
         small_c = lst.count("Small")
         if big_c > small_c:
@@ -140,31 +135,23 @@ class MultiAgentEnsemble:
         return None
 
     def agent_6_streak(self, lst):
-        # Streak Alternator
         if len(lst) >= 2:
             if lst[-1] != lst[-2]:
-                return lst[-1]  # Alternating continuation
+                return lst[-1]
         return None
 
     def get_committee_consensus(self, recent_list, state_key):
         votes = []
-
-        # ယူနစ်အလိုက် Agent ၆ ကောင် မဲပေးခြင်း
         v1 = self.agent_1_momentum(recent_list)
         if v1: votes.append(v1)
-
         v2 = self.agent_2_reversion(recent_list)
         if v2: votes.append(v2)
-
         v3 = self.agent_3_markov(recent_list)
         if v3: votes.append(v3)
-
         v4 = self.agent_4_qlearning(state_key)
         if v4: votes.append(v4)
-
         v5 = self.agent_5_frequency(recent_list)
         if v5: votes.append(v5)
-
         v6 = self.agent_6_streak(recent_list)
         if v6: votes.append(v6)
 
@@ -173,9 +160,7 @@ class MultiAgentEnsemble:
 
         big_votes = votes.count("Big")
         small_votes = votes.count("Small")
-        total_votes = len(votes)
 
-        # ၄ ကောင်နှင့်အထက် တူညီမှု (Consensus) ရှိမရှိ စစ်ဆေးခြင်း
         if big_votes >= 4:
             return "Big", f"6-Agent Consensus ({big_votes}/6 Big)"
         elif small_votes >= 4:
@@ -223,7 +208,6 @@ class MultiAgentEnsemble:
         recent_list = list(self.window)
         state_key = self.get_state_key()
 
-        # 6-Agent Committee ဆုံးဖြတ်ချက် ရယူခြင်း
         final_prediction, market_regime = self.get_committee_consensus(recent_list, state_key)
 
         if final_prediction:
@@ -241,10 +225,12 @@ class MultiAgentEnsemble:
             self.send_telegram(msg)
 
 def poll_telegram_commands(agent):
+    # Webhook ကို ရှင်းလင်းပြီး getUpdates ကို သေချာစတင်ရန်
     try:
-        requests.get(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/deleteWebhook?drop_pending_updates=true")
-    except:
-        pass
+        requests.get(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/deleteWebhook?drop_pending_updates=true", timeout=10)
+        print("Telegram Webhook cleared successfully.")
+    except Exception as e:
+        print(f"Error clearing webhook: {e}")
 
     offset = 0
     while True:
@@ -258,6 +244,8 @@ def poll_telegram_commands(agent):
                     message = update.get("message", {})
                     text = message.get("text", "").strip().lower()
                     chat_id = str(message.get("chat", {}).get("id", ""))
+                    
+                    print(f"Received telegram message: '{text}' from chat_id: {chat_id}")
                     
                     if chat_id == CHAT_ID:
                         if text == "/status":
@@ -291,7 +279,7 @@ def poll_telegram_commands(agent):
                             agent.is_paused = False
                             agent.send_telegram("🟢 <b>Bot ကို ပြန်လည်စတင်လိုက်ပါပြီ (/resume)။</b>")
         except Exception as e:
-            pass
+            print(f"Polling error: {e}")
         time.sleep(1)
 
 def run_bot():
@@ -307,7 +295,7 @@ def run_bot():
     url = "https://6lotteryapi.com/api/webapi/GetNoaverageEmerdList"
     headers = {
         "accept": "application/json, text/plain, */*",
-        "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOiIxNzg3OTgxNTA5IiwibmJmIjoiMTc4Nzk4MTUwOSIsImV4cCI6IjE3ODc5ODMzMDkiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL2V4cGlyYXRpb24iOiI4LzI5LzIwMjYgMTI6MzE2NDkgUE0iLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBY2Nlc3NfVG9rZW4iLCJVc2VySWQiOiIxMDEyMjEzIiwiVXNlck5hbWUiOiI5NTk3NDA5MzkzNzAiLCJVc2VyUGhvdG8iOiI5IiwiTmlja05hbWUiOiJUaetsR3lpIiwiQW1vdW50IjoiODcuMzAiLCJJbnRlZ3JhbCI6IjAiLCJMb2dpbk1hcmsiOiJINSIsIkxvZ2luVGltZSI6IjgvMjkvMjAyNiAxMjowMTo0OSBQTSIsIjxvZ2luSVBBZGRyZXNzIjoiNDUuNDEuMTA0LjI0MCIsImRiTnVtYmVyIjoiMCIsIklzdmFsaWRhdG9yIjoiMCIsIktleUNvZGUiOiIzMjMzMiIsImRva2VuVHlwZSI6IjJBY2Nlc3NfVG9rZW4iLCJob25lVHlpZSI6IjAiLCJVc2VyVHlwZSI6IjAiLCJVc2VyTmFtZTIiOiIuIiwiaXNzIjoiand0SXNzdWVyIiwiYXVkIjoibG90dGVyeVRpY2tldCJ9.ZL0Y9gexUTCsKwWeZhCLAAw8AABEYJt0GnIzIviMG4g",
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOiIxNzg3OTgxNTA5IiwibmJmIjoiMTc4Nzk4MTUwOSIsImV4cCI6IjE3ODc5ODMzMDkiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL2V4cGlyYXRpb24iOiI4LzI5LzIwMjYgMTI6MzE2NDkgUE0iLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBY2Nlc3NfVG9rZW4iLCJVc2VySWQiOiIxMDEyMjEzIiwiVXNlck5hbWUiOiI5NTk3NDA5MzkzNzAiLCJVc2VyUGhvdG8iOiI5IiwiTmlja05hbWUiOiJUaetsR3lpIiwiQW1vdW50IjoiODcuMzAiLCJJbnRlZ3JhbCI6IjAiLCJMb2dpbk1hcmsiOiJINSIsIkxvZ2luVGltZSI6IjgvMjkvMjAyNiAxMjowMTo0OSBQTSIsIjxvZ2luSVBBZGRyZXNzIjoiNDUuNDEuMTA0LjI0MCIsImRiTnVtYmVyIjoiMCIsIklzdmFsaWRhdG9yIjoiMCIsIktleUNvZGUiOiIzMjMzMiIsImRva2VuVHlwZSI6IjJBY2Nlc3NfVG9rZW4iLCJob25lVHlpZSI6IjAiLCJVc2VyVHlpZSI6IjAiLCJVc2VyTmFtZTIiOiIuIiwiaXNzIjoiand0SXNzdWVyIiwiYXVkIjoibG90dGVyeVRpY2tldCJ9.ZL0Y9gexUTCsKwWeZhCLAAw8AABEYJt0GnIzIviMG4g",
         "content-type": "application/json;charset=UTF-8",
         "origin": "https://6win598.com",
         "referer": "https://6win598.com/",
@@ -326,6 +314,8 @@ def run_bot():
             data = response.json()
             list_data = data.get("data", {}).get("list", [])
             if len(list_data) > 0:
+                latest_round = list_data.get("list",)[0] if isinstance(list_data, list) else list_data[0]
+                # Safe parsing
                 latest_round = list_data[0]
                 raw_period = str(latest_round.get("issueNumber"))
                 current_period = str(int(raw_period) + 2)
@@ -339,10 +329,11 @@ def run_bot():
             pass
         time.sleep(0.5)
 
+# Flask မတိုင်မီ Background Thread ကို ကြိုတင်စတင်ခြင်း
+bot_thread = threading.Thread(target=run_bot)
+bot_thread.daemon = True
+bot_thread.start()
+
 if __name__ == "__main__":
-    bot_thread = threading.Thread(target=run_bot)
-    bot_thread.daemon = True
-    bot_thread.start()
-    
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
