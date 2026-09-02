@@ -69,7 +69,7 @@ class MultiAgentEnsemble:
             if res.status_code == 200:
                 return {row['state']: row['actions'] for row in res.json()}
         except Exception as e:
-            print(f"Supabase Load Error: {e}")
+            pass
         return {}
 
     def save_q_table(self, state, actions):
@@ -82,14 +82,14 @@ class MultiAgentEnsemble:
         try:
             requests.post(f"{SUPABASE_URL}/rest/v1/q_table", headers=headers, json={"state": state, "actions": actions}, timeout=5)
         except Exception as e:
-            print(f"Supabase Save Error: {e}")
+            pass
 
     def send_telegram(self, message):
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
         payload = {"chat_id": CHAT_ID, "text": message, "parse_mode": "HTML"}
         try:
             res = requests.post(url, json=payload, timeout=5)
-            print(f"Telegram API Response: {res.status_code} - {res.text}")
+            print(f"Telegram Send Status: {res.status_code} - {res.text}")
         except Exception as e:
             print(f"Telegram Send Error: {e}")
 
@@ -228,6 +228,10 @@ def poll_telegram_commands(agent):
                     message = update.get("message", {})
                     text = message.get("text", "").strip().lower()
                     chat_id = str(message.get("chat", {}).get("id", ""))
+                    chat_title = message.get("chat", {}).get("title", "Private/Unknown")
+                    
+                    # 🔍 ဝင်လာသမျှ Chat ID များကို Render Logs ထဲတွင် ဖော်ပြမည်
+                    print(f"📥 Telegram Message Received! From Chat ID: {chat_id} | Title: {chat_title} | Text: {text}")
                     
                     if chat_id == CHAT_ID:
                         if text == "/status":
@@ -261,7 +265,7 @@ def run_bot():
     url = "https://6lotteryapi.com/api/webapi/GetNoaverageEmerdList"
     headers = {
         "accept": "application/json, text/plain, */*",
-        "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOiIxNzg3OTgxNTA5IiwibmJmIjoiMTc4Nzk4MTUwOSIsImV4cCI6IjE3ODc5ODMzMDkiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL2V4cGlyYXRpb24iOiI4LzI5LzIwMjYgMTI6MzE2NDkgUE0iLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBY2Nlc3NfVG9rZW4iLCJVc2VySWQiOiIxMDEyMjEzIiwiVXNlck5hbWUiOiI5NTk3NDA5MzkzNzAiLCJVc2VyUGhvdG8iOiI5IiwiTmlja05hbWUiOiJUaetsR3lpIiwiQW1vdW50IjoiODcuMzAiLCJJbnRlZ3JhbCI6IjAiLCJMb2dpbk1hcmsiOiJINSIsIkxvZ2luVGltZSI6IjgvMjkvMjAyNiAxMjowMTo0OSBQTSIsIjxvZ2luSVBBZGRyZXNzIjoiNDUuNDEuMTA0LjI0MCIsImRiTnVtYmVyIjoiMCIsIklzdmFsaWRhdG9yIjoiMCIsIktleUNvZGUiOiIzMjMzMiIsImRva2VuVHlwZSI6IjJBY2Nlc3NfVG9rZW4iLCJob25lVHlpZSI6IjAiLCJVc2VyVHlpZSI6IjAiLCJVc2VyTmFtZTIiOiIuIiwiaXNzIjoiand0SXNzdWVyIiwiYXVkIjoibG90dGVyeVRpY2tldCJ9.ZL0Y9gexUTCsKwWeZhCLAAw8AABEYJt0GnIzIviMG4g",
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOiIxNzg3OTgxNTA5IiwibmJmIjoiMTc4Nzk4MTUwOSIsImV4cCI6IjE3ODc5ODMzMDkiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL2V4cGlyYXRpb24iOiI4LzI5LzIwMjYgMTI6MzE2NDkgUE0iLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBY2Nlc3NfVG9rZW4iLCJVc2VySWQiOiIxMDEyMjEzIiwiVXNlck5hbWUiOiI5NTk3NDA5MzkzNzAiLCJVc2VyUGhvdG8iOiI5IiwiTmlja05hbWUiOiJUaetsR3lpIiwiQW1vdW50IjoiODcuMzAiLCJJbnRlZ3JhbCI6IjAiLCJMb2dpbk1hcmsiOiJINSIsIkxvZ2luVGltZSI6IjgvMjkvMjAyNiAxMjowMTo0OSBQTSIsIjxvZ2luSVBBZGRyZXNzIjoiNDUuNDEuMTA0LjI0MCIsImRiTnVtYmVyIjoiMCIsIklzdmFsaWRhdG9yIjoiMCIsIktleUNvZGUiOiIzMjMzMiIsImRva2VuVHypZSI6IjJBY2Nlc3NfVG9rZW4iLCJob25lVHlpZSI6IjAiLCJVc2VyVHlpZSI6IjAiLCJVc2VyTmFtZTIiOiIuIiwiaXNzIjoiand0SXNzdWVyIiwiYXVkIjoibG90dGVyeVRpY2tldCJ9.ZL0Y9gexUTCsKwWeZhCLAAw8AABEYJt0GnIzIviMG4g",
         "content-type": "application/json;charset=UTF-8",
         "origin": "https://6win598.com",
         "referer": "https://6win598.com/",
@@ -291,10 +295,9 @@ def run_bot():
                         last_period = current_period
                         agent.analyze_round(current_period, current_result)
         except Exception as e:
-            print(f"Wingo API Fetch Error: {e}")
-        time.sleep(1)
+            pass
+        time.sleep(0.5)
 
-# Start Bot Thread before Flask
 threading.Thread(target=run_bot, daemon=True).start()
 
 if __name__ == "__main__":
