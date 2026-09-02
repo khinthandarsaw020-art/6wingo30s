@@ -18,19 +18,55 @@ SUPABASE_KEY = "sb_publishable_bVJj1lqSAsIQ1kQ8Ae2vAQ_o3yCjDeA"
 
 app = Flask(__name__)
 
+# Global Agent Reference for Web Reports
+global_agent = None
+
 @app.route('/')
 def home():
     return "6-Agent Consensus Trading Bot is Active & Running 24/7!"
 
+@app.route('/report')
+def web_report():
+    global global_agent
+    if not global_agent:
+        return "Agent is initializing...", 500
+    
+    total_resolved = global_agent.total_wins + global_agent.total_losses
+    win_rate = (global_agent.total_wins / total_resolved * 100) if total_resolved > 0 else 0.0
+    
+    step_breakdown = ""
+    if global_agent.wins_per_step:
+        for s_name, s_count in sorted(global_agent.wins_per_step.items()):
+            step_breakdown += f"{s_name}: {s_count} wins<br>"
+    else:
+        step_breakdown = "None<br>"
+
+    html = f"""
+    <h2>📊 6-AGENT PERFORMANCE REPORT</h2>
+    <hr>
+    <p><b>State:</b> {'PAUSED 🛑' if global_agent.is_paused else 'RUNNING 🟢'}</p>
+    <p><b>Total Signals:</b> {global_agent.total_signals}</p>
+    <p><b>Wins:</b> {global_agent.total_wins} | <b>Losses:</b> {global_agent.total_losses}</p>
+    <p><b>Win Rate:</b> {win_rate:.2f}%</p>
+    <h3>🚀 Martingale Stats:</h3>
+    <p>Highest Level: Step {global_agent.max_martingale_step_reached}</p>
+    <p>Current Step: Step {global_agent.current_step + 1} ({global_agent.get_current_multiplier()}x)</p>
+    <h3>🏆 Step Breakdown:</h3>
+    <p>{step_breakdown}</p>
+    """
+    return html
+
 class MultiAgentEnsemble:
     def __init__(self):
+        global global_agent
+        global_agent = self
+
         self.window = deque(maxlen=10)
         self.current_step = 0 
         self.active_prediction = None
         self.last_state = None
         self.is_paused = False  
         
-        # 📊 Statistics Trackers
         self.total_signals = 0
         self.total_wins = 0
         self.total_losses = 0
@@ -102,9 +138,6 @@ class MultiAgentEnsemble:
         self.q_table[state][action] = old_q + self.lr * (reward - old_q)
         self.save_q_table(state, self.q_table[state])
 
-    # ==========================================
-    # 🤖 6-Agent Committee တွက်ချက်မှုများ
-    # ==========================================
     def agent_1_momentum(self, lst):
         if len(lst) >= 3 and lst[-1] == lst[-2] == lst[-3]:
             return lst[-1]
@@ -227,9 +260,8 @@ class MultiAgentEnsemble:
 def poll_telegram_commands(agent):
     try:
         requests.get(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/deleteWebhook?drop_pending_updates=true", timeout=10)
-        print("Telegram Webhook cleared successfully.")
     except Exception as e:
-        print(f"Error clearing webhook: {e}")
+        pass
 
     offset = 0
     while True:
@@ -282,7 +314,6 @@ def poll_telegram_commands(agent):
 def run_bot():
     agent = MultiAgentEnsemble()
     
-    # Telegram Command Listener Thread
     cmd_thread = threading.Thread(target=poll_telegram_commands, args=(agent,))
     cmd_thread.daemon = True
     cmd_thread.start()
@@ -313,7 +344,7 @@ def run_bot():
             list_data = data.get("data", {}).get("list", [])
             if len(list_data) > 0:
                 latest_round = list_data[0]
-                raw_period = str(latest_round.get("issueNumber"))
+                raw_period = str(latest_raw := latest_round.get("issueNumber"))
                 current_period = str(int(raw_period) + 2)
                 number = int(latest_round.get("number"))
                 current_result = "Big" if number >= 5 else "Small"
@@ -325,12 +356,10 @@ def run_bot():
             pass
         time.sleep(0.5)
 
-# 1. Bot ကို Background မှာ ကြိုတင် Run ထားခြင်း (Port ပြဿနာမရှိစေရန်)
 bot_thread = threading.Thread(target=run_bot)
 bot_thread.daemon = True
 bot_thread.start()
 
 if __name__ == "__main__":
-    # 2. Flask က Port 10000 မှာ Render ကို Health Check အနေနဲ့ အမြဲတမ်း ဖြေကြားပေးနေမည်
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
