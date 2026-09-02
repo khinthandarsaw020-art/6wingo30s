@@ -29,7 +29,7 @@ def home():
     win_rate = (global_agent.total_wins / total_resolved * 100) if total_resolved > 0 else 0.0
     
     return f"""
-    <h2>📊 6-AGENT TRADING BOT REPORT (WORKING API SYNC)</h2>
+    <h2>📊 6-AGENT TRADING BOT REPORT (DEBUG FLUSH MODE)</h2>
     <p><b>Status:</b> {'PAUSED 🛑' if global_agent.is_paused else 'RUNNING 🟢'}</p>
     <p><b>Active Chat ID:</b> {CHAT_ID}</p>
     <p><b>Total Signals:</b> {global_agent.total_signals}</p>
@@ -68,7 +68,7 @@ class MultiAgentEnsemble:
             if res.status_code == 200:
                 return {row['state']: row['actions'] for row in res.json()}
         except Exception as e:
-            pass
+            print(f"Load Q-Table Error: {e}", flush=True)
         return {}
 
     def save_q_table(self, state, actions):
@@ -81,16 +81,16 @@ class MultiAgentEnsemble:
         try:
             requests.post(f"{SUPABASE_URL}/rest/v1/q_table", headers=headers, json={"state": state, "actions": actions}, timeout=5)
         except Exception as e:
-            pass
+            print(f"Save Q-Table Error: {e}", flush=True)
 
     def send_telegram(self, message):
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
         payload = {"chat_id": CHAT_ID, "text": message, "parse_mode": "HTML"}
         try:
             res = requests.post(url, json=payload, timeout=5)
-            print(f"Telegram Send Status: {res.status_code} - {res.text}")
+            print(f"Telegram Send Status: {res.status_code} - {res.text}", flush=True)
         except Exception as e:
-            print(f"Telegram Send Error: {e}")
+            print(f"Telegram Send Error: {e}", flush=True)
 
     def get_state_key(self):
         if len(self.window) < 5:
@@ -254,19 +254,18 @@ def poll_telegram_commands(agent):
                             agent.is_paused = False
                             agent.send_telegram("🟢 <b>Bot Resumed.</b>")
         except Exception as e:
-            print(f"Telegram Polling Error: {e}")
+            print(f"Telegram Polling Error: {e}", flush=True)
         time.sleep(1)
 
 def run_bot():
-    print("🤖 Background Wingo Bot Thread Started (Working API Sync)...")
+    print("🤖 Background Wingo Bot Thread Started (Flush Debug Mode)...", flush=True)
     agent = MultiAgentEnsemble()
     
     threading.Thread(target=poll_telegram_commands, args=(agent,), daemon=True).start()
 
     last_period = ""
     url = "https://6lotteryapi.com/api/webapi/GetNoaverageEmerdList"
-    
-    auth_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOiIxNzg3OTgxNTA5IiwibmJmIjoiMTc4Nzk4MTUwOSIsImV4cCI6IjE3ODc5ODMzMDkiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL2V4cGlyYXRpb24iOiI4LzI5LzIwMjYgMTI6MzE2NDkgUE0iLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBY2Nlc3NfVG9rZW4iLCJVc2VySWQiOiIxMDEyMjEzIiwiVXNlck5hbWUiOiI5NTk3NDA5MzkzNzAiLCJVc2VyUGhvdG8iOiI5IiwiTmlja05hbWUiOiJUaetsR3lpIiwiQW1vdW50IjoiODcuMzAiLCJJbnRlZ3JhbCI6IjAiLCJMb2dpbk1hcmsiOiJINSIsIkxvZ2luVGltZSI6IjgvMjkvMjAyNiAxMjowMTo0OSBQTSIsIjxvZ2luSVBBZGRyZXNzIjoiNDUuNDEuMTA0LjI0MCIsImRiTnVtYmVyIjoiMCIsIklzdmFsaWRhdG9yIjoiMCIsIktleUNvZGUiOiIzMjMzMiIsImRva2VuVHypZSI6IjJBY2Nlc3NfVG9rZW4i লিওsIjAwIiwiVXNlclR5aWUiOiIwIiwiVXNlck5hbWdlIjoiLiIsImlzcyI6Imp3dElzc3VlciIsImF1ZCI6ImxvdHRlcnl0aWNrZXQifQ.ZL0Y9gexUTCsKwWeZhCLAAw8AABEYJt0GnIzIviMG4g"
+    auth_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOiIxNzg3OTgxNTA5IiwibmJmIjoiMTc4Nzk4MTUwOSIsImV4cCI6IjE3ODc5ODMzMDkiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL2V4cGlyYXRpb24iOiI4LzI5LzIwMjYgMTI6MzE2NDkgUE0iLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBY2Nlc3NfVG9rZW4iLCJVc2VySWQiOiIxMDEyMjEzIiwiVXNlck5hbWUiOiI5NTk3NDA5MzkzNzAiLCJVc2VyUGhvdG8iOiI5IiwiTmlja05hbWUiOiJUaetsR3lpIiwiQW1vdW50IjoiODcuMzAiLCJJbnRlZ3JhbCI6IjAiLCJMb2dpbk1hcmsiOiJINSIsIkxvZ2luVGltZSI6IjgvMjkvMjAyNEYgMTI6MTo0OSBQTSIsIjxvZ2luSVBBZGRyZXNzIjoiNDUuNDEuMTA0LjI0MCIsImRiTnVtYmVyIjoiMCIsIklzdmFsaWRhdG9yIjoiMCIsIktleUNvZGUiOiIzMjMzMiIsImRva2VuVHypZSI6IjJBY2Nlc3NfVG9rZW4iLCJob25lVHlpZSI6IjAiLCJVc2VyVHlpZSI6IjAiLCJVc2VyTmFtZ2UiOiIuIiwiaXNzIjoiand0SXNzdWVyIiwiYXVkIjoibG90dGVyeVRpY2tldCJ9.ZL0Y9gexUTCsKwWeZhCLAAw8AABEYJt0GnIzIviMG4g"
 
     headers = {
         "accept": "application/json, text/plain, */*",
@@ -279,7 +278,6 @@ def run_bot():
     
     while True:
         try:
-            # တခြားအလုပ်လုပ်နေတဲ့ Bot ကဲ့သို့ တိကျသော Payload ပုံစံ
             payload = {
                 "pageSize": 10, 
                 "pageNo": 1, 
@@ -291,6 +289,8 @@ def run_bot():
             }
             
             response = requests.post(url, headers=headers, json=payload, timeout=5)
+            print(f"API Attempt Status Code: {response.status_code}", flush=True)
+            
             if response.status_code == 200:
                 data = response.json()
                 list_data = data.get("data", {}).get("list", [])
@@ -303,13 +303,13 @@ def run_bot():
                     
                     if current_period != last_period:
                         last_period = current_period
-                        print(f"API Success Sync - Round: {current_period} -> Result: {current_result}")
+                        print(f"API Success Sync - Round: {current_period} -> Result: {current_result}", flush=True)
                         agent.analyze_round(current_period, current_result)
             else:
-                print(f"API Sync Error Code: {response.status_code} - {response.text}")
+                print(f"API Error Response: {response.text}", flush=True)
         except Exception as e:
-            print(f"API Sync Exception: {e}")
-        time.sleep(1.5)
+            print(f"API Exception Error: {e}", flush=True)
+        time.sleep(2)
 
 threading.Thread(target=run_bot, daemon=True).start()
 
