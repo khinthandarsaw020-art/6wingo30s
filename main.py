@@ -29,7 +29,7 @@ def home():
     win_rate = (global_agent.total_wins / total_resolved * 100) if total_resolved > 0 else 0.0
     
     return f"""
-    <h2>📊 6-AGENT TRADING BOT REPORT (OPTIONS 1, 3, 4 ACTIVE)</h2>
+    <h2>📊 6-AGENT TRADING BOT REPORT (DEBUG MODE)</h2>
     <p><b>Status:</b> {'PAUSED 🛑' if global_agent.is_paused else 'RUNNING 🟢'}</p>
     <p><b>Active Chat ID:</b> {CHAT_ID}</p>
     <p><b>Total Signals:</b> {global_agent.total_signals}</p>
@@ -44,7 +44,7 @@ class MultiAgentEnsemble:
         global global_agent
         global_agent = self
 
-        self.window = deque(maxlen=20) # Multi-timeframe အတွက် Window ကို ချဲ့ထားသည် (Macro + Micro)
+        self.window = deque(maxlen=20)
         self.current_step = 0 
         self.active_prediction = None
         self.last_state = None
@@ -68,7 +68,7 @@ class MultiAgentEnsemble:
             if res.status_code == 200:
                 return {row['state']: row['actions'] for row in res.json()}
         except Exception as e:
-            pass
+            print(f"Load Q-Table Error: {e}")
         return {}
 
     def save_q_table(self, state, actions):
@@ -81,7 +81,7 @@ class MultiAgentEnsemble:
         try:
             requests.post(f"{SUPABASE_URL}/rest/v1/q_table", headers=headers, json={"state": state, "actions": actions}, timeout=5)
         except Exception as e:
-            pass
+            print(f"Save Q-Table Error: {e}")
 
     def send_telegram(self, message):
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -110,15 +110,11 @@ class MultiAgentEnsemble:
         self.q_table[state][action] = old_q + self.lr * (reward - old_q)
         self.save_q_table(state, self.q_table[state])
 
-    # =========================================================
-    # 🧠 OPTION 1 & 4: Upgraded Agents with Multi-Timeframe Logic
-    # =========================================================
     def agent_1_micro_momentum(self, lst):
         recent = list(lst)[-3:]
         return recent[-1] if recent else "Big"
 
     def agent_2_macro_trend(self, lst):
-        """Option 4: Multi-timeframe macro trend analysis (last 15 rounds)."""
         if len(lst) >= 10:
             macro = list(lst)[-15:]
             big_c = macro.count("Big")
@@ -127,7 +123,6 @@ class MultiAgentEnsemble:
         return lst[-1] if lst else "Big"
 
     def agent_3_pattern_ml(self, lst):
-        """Option 1: Advanced pattern probability matching."""
         if len(lst) >= 6:
             p = list(lst)[-4:]
             matches = [lst[i+4] for i in range(len(lst)-4) if list(lst)[i:i+4] == p]
@@ -149,16 +144,11 @@ class MultiAgentEnsemble:
             return "Small" if lst[-1] == "Big" else "Big"
         return "Small" if (lst and lst[-1] == "Big") else "Big"
 
-    # =========================================================
-    # 📉 OPTION 3: Market Volatility & Regime Filter
-    # =========================================================
     def check_market_volatility(self, lst):
-        """Returns True if the market is too choppy/unstable based on frequent alternating."""
         if len(lst) < 6:
             return False
         recent = list(lst)[-6:]
         flips = sum(1 for i in range(len(recent)-1) if recent[i] != recent[i+1])
-        # If it flips 4 or more times in 6 rounds, it's a high volatility / choppy market
         return flips >= 4
 
     def get_committee_consensus(self, recent_list, state_key):
@@ -173,8 +163,6 @@ class MultiAgentEnsemble:
 
         big_votes = votes.count("Big")
         small_votes = votes.count("Small")
-
-        # Option 3 Check: Volatility Filter warning
         is_choppy = self.check_market_volatility(recent_list)
         filter_note = " ⚠️ (Choppy Market)" if is_choppy else ""
 
@@ -210,7 +198,7 @@ class MultiAgentEnsemble:
             self.active_prediction = None
 
         self.window.append(current_result)
-        if len(self.window) < 10: # Multi-timeframe အတွက် အနည်းဆုံး ဒေတာ ၁၀ ခု စုဆောင်းမည်
+        if len(self.window) < 10:
             self.send_telegram(f"⏳ <b>Collecting Multi-Timeframe Data... Period: {short_period}</b> ({len(self.window)}/10)")
             return
 
@@ -270,7 +258,7 @@ def poll_telegram_commands(agent):
         time.sleep(1)
 
 def run_bot():
-    print("🤖 Background Wingo Bot Thread Started (Options 1, 3, 4)...")
+    print("🤖 Background Wingo Bot Thread Started (Debug Mode)...")
     agent = MultiAgentEnsemble()
     
     threading.Thread(target=poll_telegram_commands, args=(agent,), daemon=True).start()
@@ -307,9 +295,12 @@ def run_bot():
                     
                     if current_period != last_period:
                         last_period = current_period
+                        print(f"Fetched New Round: {current_period} -> Result: {current_result}")
                         agent.analyze_round(current_period, current_result)
+            else:
+                print(f"API Error Status: {response.status_code} - {response.text}")
         except Exception as e:
-            pass
+            print(f"API Fetch Loop Error: {e}")
         time.sleep(0.5)
 
 threading.Thread(target=run_bot, daemon=True).start()
