@@ -29,7 +29,7 @@ def home():
     win_rate = (global_agent.total_wins / total_resolved * 100) if total_resolved > 0 else 0.0
     
     return f"""
-    <h2>📊 6-AGENT TRADING BOT REPORT</h2>
+    <h2>📊 6-AGENT TRADING BOT REPORT (OPTIONS 1, 3, 4 ACTIVE)</h2>
     <p><b>Status:</b> {'PAUSED 🛑' if global_agent.is_paused else 'RUNNING 🟢'}</p>
     <p><b>Active Chat ID:</b> {CHAT_ID}</p>
     <p><b>Total Signals:</b> {global_agent.total_signals}</p>
@@ -44,7 +44,7 @@ class MultiAgentEnsemble:
         global global_agent
         global_agent = self
 
-        self.window = deque(maxlen=10)
+        self.window = deque(maxlen=20) # Multi-timeframe အတွက် Window ကို ချဲ့ထားသည် (Macro + Micro)
         self.current_step = 0 
         self.active_prediction = None
         self.last_state = None
@@ -54,10 +54,8 @@ class MultiAgentEnsemble:
         self.total_signals = 0
         self.total_wins = 0
         self.total_losses = 0
-        self.max_martingale_step_reached = 0  
-        self.wins_per_step = {}               
 
-        self.lr = 0.35
+        self.lr = 0.40
         self.q_table = self.load_q_table()
 
     def get_current_multiplier(self):
@@ -95,80 +93,98 @@ class MultiAgentEnsemble:
             print(f"Telegram Send Error: {e}")
 
     def get_state_key(self):
+        if len(self.window) < 5:
+            return "Big,Big,Big,Big,Big"
         return ",".join(list(self.window)[-5:])
 
     def get_q_action(self, state):
         if state not in self.q_table:
-            self.q_table[state] = {"Big": 0.0, "Small": 0.0}
+            self.q_table[state] = {"Big": 1.5, "Small": 1.5}
         actions = self.q_table[state]
-        if actions["Big"] > actions["Small"]:
-            return "Big"
-        elif actions["Small"] > actions["Big"]:
-            return "Small"
-        return None
+        return "Big" if actions["Big"] >= actions["Small"] else "Small"
 
     def update_q_table(self, state, action, reward):
         if state not in self.q_table:
-            self.q_table[state] = {"Big": 0.0, "Small": 0.0}
+            self.q_table[state] = {"Big": 1.5, "Small": 1.5}
         old_q = self.q_table[state][action]
         self.q_table[state][action] = old_q + self.lr * (reward - old_q)
         self.save_q_table(state, self.q_table[state])
 
-    def agent_1_momentum(self, lst):
-        if len(lst) >= 3 and lst[-1] == lst[-2] == lst[-3]:
-            return lst[-1]
-        return None
+    # =========================================================
+    # 🧠 OPTION 1 & 4: Upgraded Agents with Multi-Timeframe Logic
+    # =========================================================
+    def agent_1_micro_momentum(self, lst):
+        recent = list(lst)[-3:]
+        return recent[-1] if recent else "Big"
 
-    def agent_2_reversion(self, lst):
-        if len(lst) >= 4 and lst[-1] == lst[-2] == lst[-3] == lst[-4]:
-            return "Small" if lst[-1] == "Big" else "Big"
-        return None
+    def agent_2_macro_trend(self, lst):
+        """Option 4: Multi-timeframe macro trend analysis (last 15 rounds)."""
+        if len(lst) >= 10:
+            macro = list(lst)[-15:]
+            big_c = macro.count("Big")
+            small_c = macro.count("Small")
+            return "Big" if big_c >= small_c else "Small"
+        return lst[-1] if lst else "Big"
 
-    def agent_3_markov(self, lst):
-        if len(lst) >= 5:
-            if lst[-1] == lst[-2]:
-                return "Small" if lst[-1] == "Big" else "Big"
-            return lst[-1]
-        return None
+    def agent_3_pattern_ml(self, lst):
+        """Option 1: Advanced pattern probability matching."""
+        if len(lst) >= 6:
+            p = list(lst)[-4:]
+            matches = [lst[i+4] for i in range(len(lst)-4) if list(lst)[i:i+4] == p]
+            if matches:
+                return max(set(matches), key=matches.count)
+        return lst[-1] if lst else "Big"
 
     def agent_4_qlearning(self, state_key):
         return self.get_q_action(state_key)
 
     def agent_5_frequency(self, lst):
-        big_c = lst.count("Big")
-        small_c = lst.count("Small")
-        if big_c > small_c:
+        if not lst:
             return "Big"
-        elif small_c > big_c:
-            return "Small"
-        return None
+        sub = list(lst)[-8:]
+        return "Big" if sub.count("Big") >= sub.count("Small") else "Small"
 
-    def agent_6_streak(self, lst):
-        if len(lst) >= 2:
-            if lst[-1] != lst[-2]:
-                return lst[-1]
-        return None
+    def agent_6_reversal(self, lst):
+        if len(lst) >= 3 and lst[-1] == lst[-2] == lst[-3]:
+            return "Small" if lst[-1] == "Big" else "Big"
+        return "Small" if (lst and lst[-1] == "Big") else "Big"
+
+    # =========================================================
+    # 📉 OPTION 3: Market Volatility & Regime Filter
+    # =========================================================
+    def check_market_volatility(self, lst):
+        """Returns True if the market is too choppy/unstable based on frequent alternating."""
+        if len(lst) < 6:
+            return False
+        recent = list(lst)[-6:]
+        flips = sum(1 for i in range(len(recent)-1) if recent[i] != recent[i+1])
+        # If it flips 4 or more times in 6 rounds, it's a high volatility / choppy market
+        return flips >= 4
 
     def get_committee_consensus(self, recent_list, state_key):
-        votes = []
-        for agent_func in [self.agent_1_momentum, self.agent_2_reversion, self.agent_3_markov, self.agent_5_frequency, self.agent_6_streak]:
-            v = agent_func(recent_list)
-            if v: votes.append(v)
-        v4 = self.agent_4_qlearning(state_key)
-        if v4: votes.append(v4)
-
-        if not votes:
-            return None, "No Votes"
+        votes = [
+            self.agent_1_micro_momentum(recent_list),
+            self.agent_2_macro_trend(recent_list),
+            self.agent_3_pattern_ml(recent_list),
+            self.agent_4_qlearning(state_key),
+            self.agent_5_frequency(recent_list),
+            self.agent_6_reversal(recent_list)
+        ]
 
         big_votes = votes.count("Big")
         small_votes = votes.count("Small")
 
-        if big_votes >= 4:
-            return "Big", f"6-Agent Consensus ({big_votes}/6 Big)"
-        elif small_votes >= 4:
-            return "Small", f"6-Agent Consensus ({small_votes}/6 Small)"
+        # Option 3 Check: Volatility Filter warning
+        is_choppy = self.check_market_volatility(recent_list)
+        filter_note = " ⚠️ (Choppy Market)" if is_choppy else ""
 
-        return None, f"Split Votes (Big: {big_votes}, Small: {small_votes})"
+        if big_votes > small_votes:
+            return "Big", f"Advanced Majority ({big_votes}/6 Big){filter_note}"
+        elif small_votes > big_votes:
+            return "Small", f"Advanced Majority ({small_votes}/6 Small){filter_note}"
+        else:
+            fallback = recent_list[-1] if recent_list else "Big"
+            return fallback, f"Tie (3-3), Fallback to {fallback}{filter_note}"
 
     def analyze_round(self, period, current_result):
         self.last_period = str(period)
@@ -180,12 +196,12 @@ class MultiAgentEnsemble:
         if self.active_prediction and self.last_state:
             predicted = self.active_prediction
             if current_result.lower() == predicted.lower():
-                reward = 4.0 if self.current_step == 0 else 3.0
+                reward = 5.0 if self.current_step == 0 else 4.0
                 self.total_wins += 1
                 self.current_step = 0  
                 self.send_telegram(f"✅ <b>AGENTS WIN! Period: {short_period}</b> (Result: {current_result})")
             else:
-                reward = -3.5 - (self.current_step * 0.5)
+                reward = -4.5 - (self.current_step * 0.5)
                 self.total_losses += 1
                 self.current_step += 1  
                 self.send_telegram(f"❌ <b>AGENTS LOSS! Period: {short_period}</b> (Result: {current_result})")
@@ -194,31 +210,24 @@ class MultiAgentEnsemble:
             self.active_prediction = None
 
         self.window.append(current_result)
-        if len(self.window) < 6:
-            self.send_telegram(f"⏳ <b>Collecting Data... Period: {short_period}</b> (Need {6 - len(self.window)} more rounds)")
+        if len(self.window) < 10: # Multi-timeframe အတွက် အနည်းဆုံး ဒေတာ ၁၀ ခု စုဆောင်းမည်
+            self.send_telegram(f"⏳ <b>Collecting Multi-Timeframe Data... Period: {short_period}</b> ({len(self.window)}/10)")
             return
 
         state_key = self.get_state_key()
         final_prediction, market_regime = self.get_committee_consensus(list(self.window), state_key)
 
-        if final_prediction:
-            self.last_state = state_key
-            self.active_prediction = final_prediction
-            self.total_signals += 1  
-            msg = (
-                f"🤖 <b>6-AGENT COMMITTEE | Period: {short_period}</b>\n\n"
-                f"🏛️ Regime: <b>{market_regime}</b>\n"
-                f"🎯 <b>Signal:</b> <b>{final_prediction.upper()}</b>\n"
-                f"💰 <b>Martingale:</b> Step {self.current_step + 1} ({self.get_current_multiplier()}x)"
-            )
-            self.send_telegram(msg)
-        else:
-            # 🔍 Consensus မရသေးဘဲ စောင့်ကြည့်နေကြောင်း Round တိုင်း ပို့ပေးမည်
-            msg = (
-                f"🔍 <b>Market Monitoring | Period: {short_period}</b>\n"
-                f"⚖️ Status: <b>{market_regime}</b> (Waiting for 4/6 Consensus... Skipped)"
-            )
-            self.send_telegram(msg)
+        self.last_state = state_key
+        self.active_prediction = final_prediction
+        self.total_signals += 1  
+        
+        msg = (
+            f"🤖 <b>ADVANCED COMMITTEE | Period: {short_period}</b>\n\n"
+            f"🏛️ Regime: <b>{market_regime}</b>\n"
+            f"🎯 <b>Signal:</b> <b>{final_prediction.upper()}</b>\n"
+            f"💰 <b>Martingale:</b> Step {self.current_step + 1} ({self.get_current_multiplier()}x)"
+        )
+        self.send_telegram(msg)
 
 def poll_telegram_commands(agent):
     try:
@@ -243,7 +252,7 @@ def poll_telegram_commands(agent):
                             total_resolved = agent.total_wins + agent.total_losses
                             win_rate = (agent.total_wins / total_resolved * 100) if total_resolved > 0 else 0.0
                             status_msg = (
-                                f"📊 <b>6-AGENT PERFORMANCE REPORT</b>\n\n"
+                                f"📊 <b>ADVANCED BOT PERFORMANCE REPORT</b>\n\n"
                                 f"⚙️ State: <b>{'PAUSED 🛑' if agent.is_paused else 'RUNNING 🟢'}</b>\n"
                                 f"🎯 Total Signals: <b>{agent.total_signals}</b>\n"
                                 f"✅ Wins: <b>{agent.total_wins}</b> | ❌ Losses: <b>{agent.total_losses}</b>\n"
@@ -261,7 +270,7 @@ def poll_telegram_commands(agent):
         time.sleep(1)
 
 def run_bot():
-    print("🤖 Background Wingo Bot Thread Started...")
+    print("🤖 Background Wingo Bot Thread Started (Options 1, 3, 4)...")
     agent = MultiAgentEnsemble()
     
     threading.Thread(target=poll_telegram_commands, args=(agent,), daemon=True).start()
@@ -277,7 +286,7 @@ def run_bot():
         "user-agent": "Mozilla/5.0"
     }
     payload = {
-        "pageSize": 10, "pageNo": 1, "typeId": 30, "language": 7,
+        "pageSize": 20, "pageNo": 1, "typeId": 30, "language": 7,
         "random": "036263f367384d418be07465793c8da8",
         "signature": "55F4FD150F15F090B943374F3C9BE78B",
         "timestamp": 1787981526
