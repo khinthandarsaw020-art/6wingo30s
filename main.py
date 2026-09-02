@@ -17,44 +17,26 @@ SUPABASE_KEY = "sb_publishable_bVJj1lqSAsIQ1kQ8Ae2vAQ_o3yCjDeA"
 # ==========================================
 
 app = Flask(__name__)
-
-# Global Agent Reference for Web Reports
 global_agent = None
 
 @app.route('/')
 def home():
-    return "6-Agent Consensus Trading Bot is Active & Running 24/7!"
-
-@app.route('/report')
-def web_report():
     global global_agent
     if not global_agent:
-        return "Agent is initializing...", 500
+        return "<h3>🤖 Bot is starting...</h3>"
     
     total_resolved = global_agent.total_wins + global_agent.total_losses
     win_rate = (global_agent.total_wins / total_resolved * 100) if total_resolved > 0 else 0.0
     
-    step_breakdown = ""
-    if global_agent.wins_per_step:
-        for s_name, s_count in sorted(global_agent.wins_per_step.items()):
-            step_breakdown += f"{s_name}: {s_count} wins<br>"
-    else:
-        step_breakdown = "None<br>"
-
-    html = f"""
-    <h2>📊 6-AGENT PERFORMANCE REPORT</h2>
-    <hr>
-    <p><b>State:</b> {'PAUSED 🛑' if global_agent.is_paused else 'RUNNING 🟢'}</p>
+    return f"""
+    <h2>📊 6-AGENT TRADING BOT REPORT</h2>
+    <p><b>Status:</b> {'PAUSED 🛑' if global_agent.is_paused else 'RUNNING 🟢'}</p>
     <p><b>Total Signals:</b> {global_agent.total_signals}</p>
     <p><b>Wins:</b> {global_agent.total_wins} | <b>Losses:</b> {global_agent.total_losses}</p>
     <p><b>Win Rate:</b> {win_rate:.2f}%</p>
-    <h3>🚀 Martingale Stats:</h3>
-    <p>Highest Level: Step {global_agent.max_martingale_step_reached}</p>
-    <p>Current Step: Step {global_agent.current_step + 1} ({global_agent.get_current_multiplier()}x)</p>
-    <h3>🏆 Step Breakdown:</h3>
-    <p>{step_breakdown}</p>
+    <p><b>Current Martingale Step:</b> Step {global_agent.current_step + 1} ({global_agent.get_current_multiplier()}x)</p>
+    <p><b>Last Fetched Period:</b> {global_agent.last_period}</p>
     """
-    return html
 
 class MultiAgentEnsemble:
     def __init__(self):
@@ -66,6 +48,7 @@ class MultiAgentEnsemble:
         self.active_prediction = None
         self.last_state = None
         self.is_paused = False  
+        self.last_period = "None"
         
         self.total_signals = 0
         self.total_wins = 0
@@ -80,20 +63,13 @@ class MultiAgentEnsemble:
         return 2 ** self.current_step
 
     def load_q_table(self):
-        headers = {
-            "apikey": SUPABASE_KEY,
-            "Authorization": f"Bearer {SUPABASE_KEY}"
-        }
+        headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
         try:
             res = requests.get(f"{SUPABASE_URL}/rest/v1/q_table?select=*", headers=headers, timeout=5)
             if res.status_code == 200:
-                data = res.json()
-                q_dict = {}
-                for row in data:
-                    q_dict[row['state']] = row['actions']
-                return q_dict
+                return {row['state']: row['actions'] for row in res.json()}
         except Exception as e:
-            print(f"Error loading Q-Table: {e}")
+            print(f"Supabase Load Error: {e}")
         return {}
 
     def save_q_table(self, state, actions):
@@ -103,20 +79,19 @@ class MultiAgentEnsemble:
             "Content-Type": "application/json",
             "Prefer": "resolution=merge-duplicates"
         }
-        payload = {"state": state, "actions": actions}
         try:
-            requests.post(f"{SUPABASE_URL}/rest/v1/q_table", headers=headers, json=payload, timeout=5)
+            requests.post(f"{SUPABASE_URL}/rest/v1/q_table", headers=headers, json={"state": state, "actions": actions}, timeout=5)
         except Exception as e:
-            print(f"Error saving Q-Table: {e}")
+            print(f"Supabase Save Error: {e}")
 
     def send_telegram(self, message):
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
         payload = {"chat_id": CHAT_ID, "text": message, "parse_mode": "HTML"}
         try:
             res = requests.post(url, json=payload, timeout=5)
-            print(f"Telegram sent status: {res.status_code}")
+            print(f"Telegram API Response: {res.status_code} - {res.text}")
         except Exception as e:
-            print(f"Telegram Error: {e}")
+            print(f"Telegram Send Error: {e}")
 
     def get_state_key(self):
         return ",".join(list(self.window)[-5:])
@@ -175,18 +150,11 @@ class MultiAgentEnsemble:
 
     def get_committee_consensus(self, recent_list, state_key):
         votes = []
-        v1 = self.agent_1_momentum(recent_list)
-        if v1: votes.append(v1)
-        v2 = self.agent_2_reversion(recent_list)
-        if v2: votes.append(v2)
-        v3 = self.agent_3_markov(recent_list)
-        if v3: votes.append(v3)
+        for agent_func in [self.agent_1_momentum, self.agent_2_reversion, self.agent_3_markov, self.agent_5_frequency, self.agent_6_streak]:
+            v = agent_func(recent_list)
+            if v: votes.append(v)
         v4 = self.agent_4_qlearning(state_key)
         if v4: votes.append(v4)
-        v5 = self.agent_5_frequency(recent_list)
-        if v5: votes.append(v5)
-        v6 = self.agent_6_streak(recent_list)
-        if v6: votes.append(v6)
 
         if not votes:
             return None, "No Votes"
@@ -202,6 +170,7 @@ class MultiAgentEnsemble:
         return None, f"Split Votes (Big: {big_votes}, Small: {small_votes}) - Skipped"
 
     def analyze_round(self, period, current_result):
+        self.last_period = str(period)
         if self.is_paused:
             return  
 
@@ -209,19 +178,9 @@ class MultiAgentEnsemble:
 
         if self.active_prediction and self.last_state:
             predicted = self.active_prediction
-            reward = 0
-            
-            current_level_num = self.current_step + 1
-            if current_level_num > self.max_martingale_step_reached:
-                self.max_martingale_step_reached = current_level_num
-
             if current_result.lower() == predicted.lower():
                 reward = 4.0 if self.current_step == 0 else 3.0
                 self.total_wins += 1
-                
-                step_key = f"Step {current_level_num} ({self.get_current_multiplier()}x)"
-                self.wins_per_step[step_key] = self.wins_per_step.get(step_key, 0) + 1
-
                 self.current_step = 0  
                 self.send_telegram(f"✅ <b>AGENTS WIN! Period: {short_period}</b>")
             else:
@@ -234,33 +193,28 @@ class MultiAgentEnsemble:
             self.active_prediction = None
 
         self.window.append(current_result)
-        
         if len(self.window) < 6:
             return
 
-        recent_list = list(self.window)
         state_key = self.get_state_key()
-
-        final_prediction, market_regime = self.get_committee_consensus(recent_list, state_key)
+        final_prediction, market_regime = self.get_committee_consensus(list(self.window), state_key)
 
         if final_prediction:
             self.last_state = state_key
             self.active_prediction = final_prediction
             self.total_signals += 1  
-            current_multiplier = self.get_current_multiplier()
-            
             msg = (
                 f"🤖 <b>6-AGENT COMMITTEE | Period: {short_period}</b>\n\n"
                 f"🏛️ Regime: <b>{market_regime}</b>\n"
                 f"🎯 <b>Signal:</b> <b>{final_prediction.upper()}</b>\n"
-                f"💰 <b>Martingale:</b> Step {self.current_step + 1} ({current_multiplier}x)"
+                f"💰 <b>Martingale:</b> Step {self.current_step + 1} ({self.get_current_multiplier()}x)"
             )
             self.send_telegram(msg)
 
 def poll_telegram_commands(agent):
     try:
         requests.get(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/deleteWebhook?drop_pending_updates=true", timeout=10)
-    except Exception as e:
+    except:
         pass
 
     offset = 0
@@ -269,8 +223,7 @@ def poll_telegram_commands(agent):
             url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates?offset={offset}&timeout=20"
             res = requests.get(url, timeout=25)
             if res.status_code == 200:
-                data = res.json()
-                for update in data.get("result", []):
+                for update in res.json().get("result", []):
                     offset = update["update_id"] + 1
                     message = update.get("message", {})
                     text = message.get("text", "").strip().lower()
@@ -280,47 +233,31 @@ def poll_telegram_commands(agent):
                         if text == "/status":
                             total_resolved = agent.total_wins + agent.total_losses
                             win_rate = (agent.total_wins / total_resolved * 100) if total_resolved > 0 else 0.0
-                            
-                            step_breakdown = ""
-                            if agent.wins_per_step:
-                                for s_name, s_count in sorted(agent.wins_per_step.items()):
-                                    step_breakdown += f"  • {s_name}: <b>{s_count} ပွဲ နိုင်</b>\n"
-                            else:
-                                step_breakdown = "  • မရှိသေးပါ\n"
-
                             status_msg = (
                                 f"📊 <b>6-AGENT PERFORMANCE REPORT</b>\n\n"
                                 f"⚙️ State: <b>{'PAUSED 🛑' if agent.is_paused else 'RUNNING 🟢'}</b>\n"
                                 f"🎯 Total Signals: <b>{agent.total_signals}</b>\n"
                                 f"✅ Wins: <b>{agent.total_wins}</b> | ❌ Losses: <b>{agent.total_losses}</b>\n"
-                                f"📈 <b>Win Rate: {win_rate:.2f}%</b>\n\n"
-                                f"🚀 <b>Martingale Stats:</b>\n"
-                                f"  • အမြင့်ဆုံး Level: <b>Step {agent.max_martingale_step_reached} ({2**(agent.max_martingale_step_reached-1) if agent.max_martingale_step_reached > 0 else 1}x)</b>\n"
-                                f"  • လက်ရှိ Step: <b>Step {agent.current_step + 1} ({agent.get_current_multiplier()}x)</b>\n\n"
-                                f"🏆 <b>Step အလိုက် နိုင်ခဲ့သည့်ပွဲများ:</b>\n"
-                                f"{step_breakdown}"
+                                f"📈 <b>Win Rate: {win_rate:.2f}%</b>"
                             )
                             agent.send_telegram(status_msg)
                         elif text == "/pause":
                             agent.is_paused = True
-                            agent.send_telegram("🛑 <b>Bot ကို ခဏရပ်နားလိုက်ပါပြီ (/pause)။</b>")
+                            agent.send_telegram("🛑 <b>Bot Paused.</b>")
                         elif text == "/resume":
                             agent.is_paused = False
-                            agent.send_telegram("🟢 <b>Bot ကို ပြန်လည်စတင်လိုက်ပါပြီ (/resume)။</b>")
+                            agent.send_telegram("🟢 <b>Bot Resumed.</b>")
         except Exception as e:
-            pass
+            print(f"Telegram Polling Error: {e}")
         time.sleep(1)
 
 def run_bot():
+    print("🤖 Background Wingo Bot Thread Started...")
     agent = MultiAgentEnsemble()
     
-    cmd_thread = threading.Thread(target=poll_telegram_commands, args=(agent,))
-    cmd_thread.daemon = True
-    cmd_thread.start()
+    threading.Thread(target=poll_telegram_commands, args=(agent,), daemon=True).start()
 
     last_period = ""
-    print("🤖 6-Agent Committee Bot စတင် အလုပ်လုပ်နေပါပြီ...")
-    
     url = "https://6lotteryapi.com/api/webapi/GetNoaverageEmerdList"
     headers = {
         "accept": "application/json, text/plain, */*",
@@ -339,26 +276,26 @@ def run_bot():
     
     while True:
         try:
-            response = requests.post(url, headers=headers, json=payload, timeout=3)
-            data = response.json()
-            list_data = data.get("data", {}).get("list", [])
-            if len(list_data) > 0:
-                latest_round = list_data[0]
-                raw_period = str(latest_raw := latest_round.get("issueNumber"))
-                current_period = str(int(raw_period) + 2)
-                number = int(latest_round.get("number"))
-                current_result = "Big" if number >= 5 else "Small"
-                
-                if current_period != last_period:
-                    last_period = current_period
-                    agent.analyze_round(current_period, current_result)
+            response = requests.post(url, headers=headers, json=payload, timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                list_data = data.get("data", {}).get("list", [])
+                if len(list_data) > 0:
+                    latest_round = list_data[0]
+                    raw_period = str(latest_round.get("issueNumber"))
+                    current_period = str(int(raw_period) + 2)
+                    number = int(latest_round.get("number"))
+                    current_result = "Big" if number >= 5 else "Small"
+                    
+                    if current_period != last_period:
+                        last_period = current_period
+                        agent.analyze_round(current_period, current_result)
         except Exception as e:
-            pass
-        time.sleep(0.5)
+            print(f"Wingo API Fetch Error: {e}")
+        time.sleep(1)
 
-bot_thread = threading.Thread(target=run_bot)
-bot_thread.daemon = True
-bot_thread.start()
+# Start Bot Thread before Flask
+threading.Thread(target=run_bot, daemon=True).start()
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
