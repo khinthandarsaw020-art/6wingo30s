@@ -10,7 +10,9 @@ from flask import Flask
 # Telegram နဲ့ Supabase အချက်အလက်များ
 # ==========================================
 TELEGRAM_TOKEN = "8782457950:AAHbd-J29Y0fKhcBOHbSnn1d4z4vhiDQLKg" 
-CHAT_ID = "-1003917249143"
+
+# ပေးထားသည့် Group Chat ID အမှန်ကို တိုက်ရိုက်ထည့်သွင်းပြီးပါပြီ
+CHAT_ID = "-1004341746467"
 
 SUPABASE_URL = "https://msgzacekhrvlqkqgjvly.supabase.co"
 SUPABASE_KEY = "sb_publishable_bVJj1lqSAsIQ1kQ8Ae2vAQ_o3yCjDeA"
@@ -31,6 +33,7 @@ def home():
     return f"""
     <h2>📊 6-AGENT TRADING BOT REPORT</h2>
     <p><b>Status:</b> {'PAUSED 🛑' if global_agent.is_paused else 'RUNNING 🟢'}</p>
+    <p><b>Active Chat ID:</b> {CHAT_ID}</p>
     <p><b>Total Signals:</b> {global_agent.total_signals}</p>
     <p><b>Wins:</b> {global_agent.total_wins} | <b>Losses:</b> {global_agent.total_losses}</p>
     <p><b>Win Rate:</b> {win_rate:.2f}%</p>
@@ -225,13 +228,9 @@ def poll_telegram_commands(agent):
             if res.status_code == 200:
                 for update in res.json().get("result", []):
                     offset = update["update_id"] + 1
-                    message = update.get("message", {})
-                    text = message.get("text", "").strip().lower()
+                    message = update.get("message", {}) or update.get("edited_message", {})
                     chat_id = str(message.get("chat", {}).get("id", ""))
-                    chat_title = message.get("chat", {}).get("title", "Private/Unknown")
-                    
-                    # 🔍 ဝင်လာသမျှ Chat ID များကို Render Logs ထဲတွင် ဖော်ပြမည်
-                    print(f"📥 Telegram Message Received! From Chat ID: {chat_id} | Title: {chat_title} | Text: {text}")
+                    text = message.get("text", "").strip().lower()
                     
                     if chat_id == CHAT_ID:
                         if text == "/status":
