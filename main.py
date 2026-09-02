@@ -10,8 +10,6 @@ from flask import Flask
 # Telegram နဲ့ Supabase အချက်အလက်များ
 # ==========================================
 TELEGRAM_TOKEN = "8782457950:AAHbd-J29Y0fKhcBOHbSnn1d4z4vhiDQLKg" 
-
-# ပေးထားသည့် Group Chat ID အမှန်ကို တိုက်ရိုက်ထည့်သွင်းပြီးပါပြီ
 CHAT_ID = "-1004341746467"
 
 SUPABASE_URL = "https://msgzacekhrvlqkqgjvly.supabase.co"
@@ -170,7 +168,7 @@ class MultiAgentEnsemble:
         elif small_votes >= 4:
             return "Small", f"6-Agent Consensus ({small_votes}/6 Small)"
 
-        return None, f"Split Votes (Big: {big_votes}, Small: {small_votes}) - Skipped"
+        return None, f"Split Votes (Big: {big_votes}, Small: {small_votes})"
 
     def analyze_round(self, period, current_result):
         self.last_period = str(period)
@@ -185,18 +183,19 @@ class MultiAgentEnsemble:
                 reward = 4.0 if self.current_step == 0 else 3.0
                 self.total_wins += 1
                 self.current_step = 0  
-                self.send_telegram(f"✅ <b>AGENTS WIN! Period: {short_period}</b>")
+                self.send_telegram(f"✅ <b>AGENTS WIN! Period: {short_period}</b> (Result: {current_result})")
             else:
                 reward = -3.5 - (self.current_step * 0.5)
                 self.total_losses += 1
                 self.current_step += 1  
-                self.send_telegram(f"❌ <b>AGENTS LOSS! Period: {short_period}</b>")
+                self.send_telegram(f"❌ <b>AGENTS LOSS! Period: {short_period}</b> (Result: {current_result})")
             
             self.update_q_table(self.last_state, predicted, reward)
             self.active_prediction = None
 
         self.window.append(current_result)
         if len(self.window) < 6:
+            self.send_telegram(f"⏳ <b>Collecting Data... Period: {short_period}</b> (Need {6 - len(self.window)} more rounds)")
             return
 
         state_key = self.get_state_key()
@@ -211,6 +210,13 @@ class MultiAgentEnsemble:
                 f"🏛️ Regime: <b>{market_regime}</b>\n"
                 f"🎯 <b>Signal:</b> <b>{final_prediction.upper()}</b>\n"
                 f"💰 <b>Martingale:</b> Step {self.current_step + 1} ({self.get_current_multiplier()}x)"
+            )
+            self.send_telegram(msg)
+        else:
+            # 🔍 Consensus မရသေးဘဲ စောင့်ကြည့်နေကြောင်း Round တိုင်း ပို့ပေးမည်
+            msg = (
+                f"🔍 <b>Market Monitoring | Period: {short_period}</b>\n"
+                f"⚖️ Status: <b>{market_regime}</b> (Waiting for 4/6 Consensus... Skipped)"
             )
             self.send_telegram(msg)
 
@@ -264,7 +270,7 @@ def run_bot():
     url = "https://6lotteryapi.com/api/webapi/GetNoaverageEmerdList"
     headers = {
         "accept": "application/json, text/plain, */*",
-        "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOiIxNzg3OTgxNTA5IiwibmJmIjoiMTc4Nzk4MTUwOSIsImV4cCI6IjE3ODc5ODMzMDkiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL2V4cGlyYXRpb24iOiI4LzI5LzIwMjYgMTI6MzE2NDkgUE0iLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBY2Nlc3NfVG9rZW4iLCJVc2VySWQiOiIxMDEyMjEzIiwiVXNlck5hbWUiOiI5NTk3NDA5MzkzNzAiLCJVc2VyUGhvdG8iOiI5IiwiTmlja05hbWUiOiJUaetsR3lpIiwiQW1vdW50IjoiODcuMzAiLCJJbnRlZ3JhbCI6IjAiLCJMb2dpbk1hcmsiOiJINSIsIkxvZ2luVGltZSI6IjgvMjkvMjAyNiAxMjowMTo0OSBQTSIsIjxvZ2luSVBBZGRyZXNzIjoiNDUuNDEuMTA0LjI0MCIsImRiTnVtYmVyIjoiMCIsIklzdmFsaWRhdG9yIjoiMCIsIktleUNvZGUiOiIzMjMzMiIsImRva2VuVHypZSI6IjJBY2Nlc3NfVG9rZW4iLCJob25lVHlpZSI6IjAiLCJVc2VyVHlpZSI6IjAiLCJVc2VyTmFtZTIiOiIuIiwiaXNzIjoiand0SXNzdWVyIiwiYXVkIjoibG90dGVyeVRpY2tldCJ9.ZL0Y9gexUTCsKwWeZhCLAAw8AABEYJt0GnIzIviMG4g",
+        "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOiIxNzg3OTgxNTA5IiwibmJmIjoiMTc4Nzk4MTUwOSIsImV4cCI6IjE3ODc5ODMzMDkiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL2V4cGlyYXRpb24iOiI4LzI5LzIwMjYgMTI6MzE2NDkgUE0iLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBY2Nlc3NfVG9rZW4iLCJVc2VySWQiOiIxMDEyMjEzIiwiVXNlck5hbWUiOiI5NTk3NDA5MzkzNzAiLCJVc2VyUGhvdG8iOiI5IiwiTmlja05hbWUiOiJUaetsR3lpIiwiQW1vdW50IjoiODcuMzAiLCJJbnRlZ3JhbCI6IjAiLCJMb2dpbk1hcmsiOiJINSIsIkxvZ2luVGltZSI6IjgvMjkvMjAyNiAxMjowMTo0OSBQTSIsIjxvZ2luSVBBZGRyZXNzIjoiNDUuNDEuMTA0LjI0MCIsImRiTnVtYmVyIjoiMCIsIklzdmFsaWRhdG9yIjoiMCIsIktleUNvZGUiOiIzMjMzMiIsImRva2VuVHypZSI6IjJBY2Nlc3NfVG9rZW4iLCJob25lVHlpZSI6IjAiLCJVc2VyVHlpZSI6IjAiLCJVc2VyTmFtZ2UiOiIuIiwiaXNzIjoiand0SXNzdWVyIiwiYXVkIjoibG90dGVyeVRpY2tldCJ9.ZL0Y9gexUTCsKwWeZhCLAAw8AABEYJt0GnIzIviMG4g",
         "content-type": "application/json;charset=UTF-8",
         "origin": "https://6win598.com",
         "referer": "https://6win598.com/",
