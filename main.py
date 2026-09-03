@@ -29,7 +29,7 @@ def home():
     win_rate = (global_agent.total_wins / total_resolved * 100) if total_resolved > 0 else 0.0
     
     return f"""
-    <h2>📊 6-AGENT TRADING BOT REPORT (10-DIGIT TIMESTAMP FIXED)</h2>
+    <h2>📊 WINGO ADAPTIVE HYBRID BOT REPORT</h2>
     <p><b>Status:</b> {'PAUSED 🛑' if global_agent.is_paused else 'RUNNING 🟢'}</p>
     <p><b>Active Chat ID:</b> {CHAT_ID}</p>
     <p><b>Total Signals:</b> {global_agent.total_signals}</p>
@@ -39,12 +39,12 @@ def home():
     <p><b>Last Fetched Period:</b> {global_agent.last_period}</p>
     """
 
-class MultiAgentEnsemble:
+class AdaptiveHybridEngine:
     def __init__(self):
         global global_agent
         global_agent = self
 
-        self.window = deque(maxlen=20)
+        self.window = deque(maxlen=40)
         self.current_step = 0 
         self.active_prediction = None
         self.last_state = None
@@ -57,6 +57,10 @@ class MultiAgentEnsemble:
 
         self.lr = 0.40
         self.q_table = self.load_q_table()
+        
+        # နည်းလမ်းတစ်ခုချင်းစီ၏ အောင်မြင်မှု အမှတ်စာရင်း (Dynamic Weights)
+        self.model_weights = {"Markov": 1.0, "Pattern": 1.0, "Streak": 1.0, "QLearning": 1.0}
+        self.last_predictions_by_model = {}
 
     def get_current_multiplier(self):
         return 2 ** self.current_step
@@ -110,39 +114,61 @@ class MultiAgentEnsemble:
         self.q_table[state][action] = old_q + self.lr * (reward - old_q)
         self.save_q_table(state, self.q_table[state])
 
-    def agent_1_micro_momentum(self, lst):
-        recent = list(lst)[-3:]
-        return recent[-1] if recent else "Big"
+    # ---------------------------------------------------------
+    # 🧠 ADAPTIVE PREDICTION MODELS
+    # ---------------------------------------------------------
+    def markov_chain_predict(self, lst):
+        if len(lst) < 4:
+            return "Big"
+        transitions = {"Big": {"Big": 0, "Small": 0}, "Small": {"Big": 0, "Small": 0}}
+        lst_arr = list(lst)
+        for i in range(len(lst_arr) - 1):
+            curr = lst_arr[i]
+            nxt = lst_arr[i+1]
+            if curr in transitions and nxt in transitions[curr]:
+                transitions[curr][nxt] += 1
+        last_val = lst_arr[-1]
+        big_c = transitions[last_val]["Big"]
+        small_c = transitions[last_val]["Small"]
+        if big_c == small_c:
+            return last_val
+        return "Big" if big_c > small_c else "Small"
 
-    def agent_2_macro_trend(self, lst):
-        if len(lst) >= 10:
-            macro = list(lst)[-15:]
-            big_c = macro.count("Big")
-            small_c = macro.count("Small")
-            return "Big" if big_c >= small_c else "Small"
-        return lst[-1] if lst else "Big"
-
-    def agent_3_pattern_ml(self, lst):
-        if len(lst) >= 6:
-            p = list(lst)[-4:]
-            matches = [lst[i+4] for i in range(len(lst)-4) if list(lst)[i:i+4] == p]
+    def deep_pattern_match(self, lst):
+        lst_arr = list(lst)
+        if len(lst_arr) < 8:
+            return lst_arr[-1] if lst_arr else "Big"
+        for length in range(5, 2, -1):
+            pattern = lst_arr[-length:]
+            matches = []
+            for i in range(len(lst_arr) - length):
+                sub = lst_arr[i:i+length]
+                if sub == pattern and (i + length) < len(lst_arr):
+                    matches.append(lst_arr[i+length])
             if matches:
                 return max(set(matches), key=matches.count)
-        return lst[-1] if lst else "Big"
+        return lst_arr[-1]
 
-    def agent_4_qlearning(self, state_key):
-        return self.get_q_action(state_key)
-
-    def agent_5_frequency(self, lst):
-        if not lst:
+    def streak_trend_reversal(self, lst):
+        lst_arr = list(lst)
+        if len(lst_arr) < 5:
             return "Big"
-        sub = list(lst)[-8:]
-        return "Big" if sub.count("Big") >= sub.count("Small") else "Small"
+        streak_count = 1
+        for i in range(len(lst_arr)-2, -1, -1):
+            if lst_arr[i] == lst_arr[-1]:
+                streak_count += 1
+            else:
+                break
+        if streak_count >= 3:
+            return "Small" if lst_arr[-1] == "Big" else "Big"
+        else:
+            return lst_arr[-1]
 
-    def agent_6_reversal(self, lst):
-        if len(lst) >= 3 and lst[-1] == lst[-2] == lst[-3]:
-            return "Small" if lst[-1] == "Big" else "Big"
-        return "Small" if (lst and lst[-1] == "Big") else "Big"
+    def q_momentum_predict(self, lst, state_key):
+        q_act = self.get_q_action(state_key)
+        recent = list(lst)[-3:] if len(lst) >= 3 else list(lst)
+        mom = recent[-1] if recent else "Big"
+        return q_act if q_act == mom else mom
 
     def check_market_volatility(self, lst):
         if len(lst) < 6:
@@ -151,28 +177,33 @@ class MultiAgentEnsemble:
         flips = sum(1 for i in range(len(recent)-1) if recent[i] != recent[i+1])
         return flips >= 4
 
-    def get_committee_consensus(self, recent_list, state_key):
-        votes = [
-            self.agent_1_micro_momentum(recent_list),
-            self.agent_2_macro_trend(recent_list),
-            self.agent_3_pattern_ml(recent_list),
-            self.agent_4_qlearning(state_key),
-            self.agent_5_frequency(recent_list),
-            self.agent_6_reversal(recent_list)
-        ]
+    def get_adaptive_consensus(self, recent_list, state_key):
+        m1 = self.markov_chain_predict(recent_list)
+        m2 = self.deep_pattern_match(recent_list)
+        m3 = self.streak_trend_reversal(recent_list)
+        m4 = self.q_momentum_predict(recent_list, state_key)
 
-        big_votes = votes.count("Big")
-        small_votes = votes.count("Small")
+        # သိမ်းဆည်းထားသော Model အလိုက် Dynamic Weights များဖြင့် တွက်ချက်ခြင်း
+        predictions = {"Markov": m1, "Pattern": m2, "Streak": m3, "QLearning": m4}
+        self.last_predictions_by_model = predictions
+
+        scores = {"Big": 0.0, "Small": 0.0}
+        for model_name, pred in predictions.items():
+            weight = self.model_weights.get(model_name, 1.0)
+            scores[pred] += weight
+
         is_choppy = self.check_market_volatility(recent_list)
         filter_note = " ⚠️ (Choppy Market)" if is_choppy else ""
 
-        if big_votes > small_votes:
-            return "Big", f"Advanced Majority ({big_votes}/6 Big){filter_note}"
-        elif small_votes > big_votes:
-            return "Small", f"Advanced Majority ({small_votes}/6 Small){filter_note}"
+        big_score = scores["Big"]
+        small_score = scores["Small"]
+
+        if big_score > small_score:
+            return "Big", f"Adaptive Weighted Majority ({big_score:.1f} Big){filter_note}"
+        elif small_score > big_score:
+            return "Small", f"Adaptive Weighted Majority ({small_score:.1f} Small){filter_note}"
         else:
-            fallback = recent_list[-1] if recent_list else "Big"
-            return fallback, f"Tie (3-3), Fallback to {fallback}{filter_note}"
+            return m3, f"Adaptive Tie-Break, Fallback to {m3}{filter_note}"
 
     def analyze_round(self, period, current_result):
         self.last_period = str(period)
@@ -183,34 +214,47 @@ class MultiAgentEnsemble:
 
         if self.active_prediction and self.last_state:
             predicted = self.active_prediction
+            
+            # Model တစ်ခုချင်းစီ၏ မှန်ကန်မှုကို စစ်ဆေးပြီး Weights များကို အလိုအလျောက် ချိန်ညှိခြင်း (Self-Learning)
+            for model_name, pred in self.last_predictions_by_model.items():
+                if pred.lower() == current_result.lower():
+                    self.model_weights[model_name] = min(3.0, self.model_weights[model_name] + 0.15)
+                else:
+                    self.model_weights[model_name] = max(0.5, self.model_weights[model_name] - 0.15)
+
             if current_result.lower() == predicted.lower():
                 reward = 5.0 if self.current_step == 0 else 4.0
                 self.total_wins += 1
                 self.current_step = 0  
-                self.send_telegram(f"✅ <b>AGENTS WIN! Period: {short_period}</b> (Result: {current_result})")
+                self.send_telegram(f"✅ <b>ADAPTIVE WIN! Period: {short_period}</b> (Result: {current_result})")
             else:
                 reward = -4.5 - (self.current_step * 0.5)
                 self.total_losses += 1
                 self.current_step += 1  
-                self.send_telegram(f"❌ <b>AGENTS LOSS! Period: {short_period}</b> (Result: {current_result})")
+                
+                # Circuit Breaker: Martingale Step 9 ရောက်လာပါက အလွန်အမင်း မလောင်ကျွမ်းအောင် သတိပေးချက်ပို့မည်
+                if self.current_step >= 9:
+                    self.send_telegram(f"🚨 <b>HIGH RISK WARNING: Martingale Step {self.current_step + 1} Reached!</b>")
+
+                self.send_telegram(f"❌ <b>ADAPTIVE LOSS! Period: {short_period}</b> (Result: {current_result})")
             
             self.update_q_table(self.last_state, predicted, reward)
             self.active_prediction = None
 
         self.window.append(current_result)
         if len(self.window) < 10:
-            self.send_telegram(f"⏳ <b>Collecting Data... Period: {short_period}</b> ({len(self.window)}/10)")
+            self.send_telegram(f"⏳ <b>Collecting Adaptive Data... Period: {short_period}</b> ({len(self.window)}/10)")
             return
 
         state_key = self.get_state_key()
-        final_prediction, market_regime = self.get_committee_consensus(list(self.window), state_key)
+        final_prediction, market_regime = self.get_adaptive_consensus(list(self.window), state_key)
 
         self.last_state = state_key
         self.active_prediction = final_prediction
         self.total_signals += 1  
         
         msg = (
-            f"🤖 <b>ADVANCED COMMITTEE | Period: {short_period}</b>\n\n"
+            f"🤖 <b>ADAPTIVE HYBRID | Period: {short_period}</b>\n\n"
             f"🏛️ Regime: <b>{market_regime}</b>\n"
             f"🎯 <b>Signal:</b> <b>{final_prediction.upper()}</b>\n"
             f"💰 <b>Martingale:</b> Step {self.current_step + 1} ({self.get_current_multiplier()}x)"
@@ -240,7 +284,7 @@ def poll_telegram_commands(agent):
                             total_resolved = agent.total_wins + agent.total_losses
                             win_rate = (agent.total_wins / total_resolved * 100) if total_resolved > 0 else 0.0
                             status_msg = (
-                                f"📊 <b>ADVANCED BOT PERFORMANCE REPORT</b>\n\n"
+                                f"📊 <b>ADAPTIVE BOT REPORT</b>\n\n"
                                 f"⚙️ State: <b>{'PAUSED 🛑' if agent.is_paused else 'RUNNING 🟢'}</b>\n"
                                 f"🎯 Total Signals: <b>{agent.total_signals}</b>\n"
                                 f"✅ Wins: <b>{agent.total_wins}</b> | ❌ Losses: <b>{agent.total_losses}</b>\n"
@@ -258,14 +302,14 @@ def poll_telegram_commands(agent):
         time.sleep(1)
 
 def run_bot():
-    print("🤖 Background Wingo Bot Thread Started (10-Digit Timestamp Fixed)...", flush=True)
-    agent = MultiAgentEnsemble()
+    print("🤖 Background Wingo Bot Thread Started (Adaptive Hybrid Engine)...", flush=True)
+    agent = AdaptiveHybridEngine()
     
     threading.Thread(target=poll_telegram_commands, args=(agent,), daemon=True).start()
 
     last_period = ""
     url = "https://6lotteryapi.com/api/webapi/GetNoaverageEmerdList"
-    auth_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOiIxNzg3OTgxNTA5IiwibmJmIjoiMTc4Nzk4MTUwOSIsImV4cCI6IjE3ODc5ODMzMDkiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL2V4cGlyYXRpb24iOiI4LzI5LzIwMjYgMTI6MzE2NDkgUE0iLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBY2Nlc3NfVG9rZW4iLCJVc2VySWQiOiIxMDEyMjEzIiwiVXNlck5hbWUiOiI5NTk3NDA5MzkzNzAiLCJVc2VyUGhvdG8iOiI5IiwiTmlja05hbWUiOiJUaetsR3lpIiwiQW1vdW50IjoiODcuMzAiLCJJbnRlZ3JhbCI6IjAiLCJMb2dpbk1hcmsiOiJINSIsIkxvZ2luVGltZSI6IjgvMjkvMjAyNiAxMjowMTo0OSBQTSIsIjxvZ2luSVBBZGRyZXNzIjoiNDUuNDEuMTA0LjI0MCIsImRiTnVtYmVyIjoiMCIsIklzdmFsaWRhdG9yIjoiMCIsIktleUNvZGUiOiIzMjMzMiIsImRva2VuVHypZSI6IjJBY2Nlc3NfVG9rZW4iLCJob25lVHlpZSI6IjAiLCJVc2VyVHlpZSI6IjAiLCJVc2VyTmFtZ2UiOiIuIiwiaXNzIjoiand0SXNzdWVyIiwiYXVkIjoibG90dGVyeVRpY2tldCJ9.ZL0Y9gexUTCsKwWeZhCLAAw8AABEYJt0GnIzIviMG4g"
+    auth_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOiIxNzg3OTgxNTA5IiwibmJmIjoiMTc4Nzk4MTUwOSIsImV4cCI6IjE3ODc5ODMzMDkiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL2V4cGlyYXRpb24iOiI4LzI5LzIwMjYgMTI6MzE2NDkgUE0iLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBY2Nlc3NfVG9rZW4iLCJVc2VySWQiOiIxMDEyMjEzIiwiVXNlck5hbWUiOiI5NTk3NDA5MzkzNzAiLCJVc2VyUGhvdG8iOiI5IiwiTmlja05hbWUiOiJUaetsR3lpIiwiQW1vdW50IjoiODcuMzAiLCJJbnRlZ3JhbCI6IjAiLCJMb2dpbk1hcmsiOiJINSIsImxvZ2luVGltZSI6IjgvMjkvMjAyNiAxMjowMTo0OSBQTSIsImxvZ2luSVBBZGRyZXNzIjoiNDUuNDEuMTA0LjI0MCIsImRiTnVtYmVyIjoiMCIsIklzdmFsaWRhdG9yIjoiMCIsIktleUNvZGUiOiIzMjMzMiIsImRva2VuVHypZSI6IjJBY2Nlc3NfVG9rZW4iLCJob25lVHlpZSI6IjAiLCJVc2VyVHlpZSI6IjAiLCJVc2VyTmFtZ2UiOiIuIiwiaXNzIjoiand0SXNzdWVyIiwiYXVkIjoibG90dGVyeVRpY2tldCJ9.ZL0Y9gexUTCsKwWeZhCLAAw8AABEYJt0GnIzIviMG4g"
 
     headers = {
         "accept": "application/json, text/plain, */*",
@@ -278,7 +322,6 @@ def run_bot():
     
     while True:
         try:
-            # 🕒 10-digit timestamp (စက္ကန့်တိတိအတွက် int(time.time())) ကိုသာ အသုံးပြုခြင်း
             payload = {
                 "pageSize": 10, 
                 "pageNo": 1, 
